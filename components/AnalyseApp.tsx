@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AnalysisResults from "./AnalysisResults";
 import { analyseReviews } from "@/lib/analysis";
 import {
@@ -36,6 +36,8 @@ export default function AnalyseApp() {
   const [source, setSource] = useState<Source | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [reading, setReading] = useState(false);
+  const summaryRef = useRef<HTMLElement>(null);
 
   const result = useMemo(
     () => (source && source.columns.text !== undefined ? buildReviews(source.rows, source.columns) : null),
@@ -59,17 +61,19 @@ export default function AnalyseApp() {
   async function onFile(file: File | undefined) {
     if (!file) return;
     if (file.size > MAX_FILE_BYTES) {
-      setError("That file is over 3 MB. Try a shorter date range.");
+      setError(`That file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. The limit is 3 MB. Try a shorter date range.`);
       return;
     }
+    setReading(true);
     try {
       load("upload", file.name, await file.text());
     } catch {
       setError("Couldn't read that file. Is it a CSV?");
     }
+    setReading(false);
   }
 
-  async function useSample() {
+  async function loadSample() {
     setLoading(true);
     try {
       const res = await fetch("/sample-reviews.csv");
@@ -82,6 +86,18 @@ export default function AnalyseApp() {
   }
 
   const analysis = useMemo(() => (result && result.reviews.length > 0 ? analyseReviews(result.reviews) : null), [result]);
+  // The home page links here with #sample to open the sample data straight away.
+  useEffect(() => {
+    if (window.location.hash === "#sample") void Promise.resolve().then(loadSample);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // When results appear for a new file, bring them into view (not when the columns are changed by hand).
+  const sourceKey = source ? `${source.kind}:${source.name}` : "";
+  useEffect(() => {
+    if (sourceKey) summaryRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [sourceKey]);
+
   const s = result?.summary;
   const withRating = s ? s.used - s.ratingMissing - s.ratingUnreadable : 0;
   const textMissing = !!source && source.columns.text === undefined;
@@ -150,26 +166,41 @@ export default function AnalyseApp() {
         </div>
         <label className="field">
           Upload your reviews file (CSV)
-          <input type="file" accept=".csv,text/csv" onChange={(e) => onFile(e.target.files?.[0])} />
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            disabled={reading}
+            onChange={async (e) => {
+              const input = e.currentTarget;
+              await onFile(input.files?.[0]);
+              input.value = ""; // so the same file can be chosen again
+            }}
+          />
         </label>
         <div className="actions">
-          <button type="button" className="btn btn-primary" onClick={useSample} disabled={loading}>
+          <button type="button" className="btn btn-primary" onClick={loadSample} disabled={loading || reading}>
             {loading ? "Loading…" : "Use the sample data"}
           </button>
           <a className="btn btn-small" href="/dinetrust-reviews-template.csv" download>
             Download CSV template
           </a>
         </div>
+        {reading && (
+          <p className="muted small" role="status">
+            Reading your file…
+          </p>
+        )}
         <p className="muted small">Your file is read in your browser. It isn&apos;t uploaded or saved anywhere.</p>
         {error && (
           <p className="notice notice-error" role="alert">
             {error}
+            {source && " Your earlier results are still shown below."}
           </p>
         )}
       </section>
 
       {source && (
-        <section className="panel" aria-live="polite">
+        <section className="panel" ref={summaryRef}>
           <h2>What we read</h2>
           {source.kind === "sample" && (
             <p className="notice notice-warning sample-banner">
@@ -302,6 +333,10 @@ export default function AnalyseApp() {
           </div>
         </section>
       )}
+
+      <p className="sr-only" role="status">
+        {analysis ? `Analysis ready for ${analysis.reviewCount} reviews.` : ""}
+      </p>
 
       {source && analysis && <AnalysisResults analysis={analysis} isSample={source.kind === "sample"} />}
     </div>

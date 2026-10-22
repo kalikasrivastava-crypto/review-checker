@@ -14,7 +14,7 @@ export default function AnalysisResults({ analysis, isSample }: { analysis: Anal
   const maxStars = Math.max(1, ...Object.values(analysis.ratingCounts));
 
   return (
-    <div className="stack" aria-live="polite">
+    <div className="stack">
       <section className="panel">
         <div className="tc-head">
           <h2>What customers mention</h2>

@@ -3868,3 +3868,13 @@ input:lang(hi) {
   gap: 6px;
   font-size: 0.92rem;
 }
+
+.welcome-lead {
+  margin: -8px auto 18px;
+  max-width: 46ch;
+}
+
+/* A link styled as the main button keeps its button text colour, even inside a panel. */
+.panel a.btn-primary {
+  color: var(--accent-ink);
+}

@@ -2,23 +2,25 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import DataNeeds from "./DataNeeds";
+import CsvNeeds from "./CsvNeeds";
 import Modal from "./Modal";
-import TryDemoButton from "./TryDemoButton";
 
 const STEPS = [
-  { n: 1, title: "Add your records", text: "Opening hours, tables, and optionally your bills and bookings." },
-  { n: 2, title: "Pick a review", text: "Paste a bad Google review you want to understand." },
-  { n: 3, title: "Get a case report", text: "What fits your records, what doesn't, and what to do next." },
+  { n: 1, title: "Upload your reviews", text: "A spreadsheet of customer reviews, saved as a CSV file." },
+  { n: 2, title: "See what they mention", text: "Food, service speed, cleanliness, pricing and ambience, with real counts." },
+  { n: 3, title: "Get three places to look first", text: "The areas customers raise concerns about most, with practical next steps." },
 ];
 
-/** The landing page content: what DineTrust does and the two ways in. */
+/** The home page content: what DineTrust does and the two ways in. */
 export default function Welcome() {
   const [explainer, setExplainer] = useState(false);
 
   return (
     <section className="panel welcome">
-      <h2 className="welcome-title">Find out if a bad Google review matches a real visit.</h2>
+      <h2 className="welcome-title">See what your customers keep mentioning, and where to look first.</h2>
+      <p className="welcome-lead muted">
+        DineTrust reads the reviews you give it, groups the feedback into themes, and shows which problems come up most.
+      </p>
 
       <ol className="how-steps" aria-label="How it works">
         {STEPS.map((s) => (
@@ -33,25 +35,25 @@ export default function Welcome() {
       </ol>
 
       <div className="welcome-actions">
-        <Link href="/restaurant" className="btn btn-solid welcome-main">
-          I&apos;m a restaurant owner
-          <span className="welcome-sub">Log in or create an account</span>
+        <Link href="/analyse" className="btn btn-primary welcome-main">
+          Analyse my reviews
+          <span className="welcome-sub">Upload a CSV file</span>
         </Link>
-        <div className="welcome-demo">
-          <TryDemoButton label="Try the demo" className="btn btn-primary welcome-main" />
-          <span className="welcome-sub-out">No sign-up. See a result in 10 seconds.</span>
-        </div>
+        <Link href="/analyse#sample" className="btn welcome-main welcome-alt">
+          Try it with sample data
+          <span className="welcome-sub">Made-up reviews, clearly labelled</span>
+        </Link>
       </div>
 
       <p className="welcome-link">
         <button type="button" className="link-button" onClick={() => setExplainer(true)}>
-          What data do I need?
+          What file do I need?
         </button>
       </p>
 
       {explainer && (
-        <Modal title="What data do I need?" onClose={() => setExplainer(false)}>
-          <DataNeeds />
+        <Modal title="What file do I need?" onClose={() => setExplainer(false)}>
+          <CsvNeeds />
         </Modal>
       )}
     </section>
