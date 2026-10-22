@@ -52,7 +52,7 @@ export default function AddReview({ onAdded }: { onAdded: (id: string) => void }
           <textarea
             value={text}
             rows={4}
-            placeholder="Paste the review from Google"
+            placeholder="e.g. “We were a table of 12 on Friday night and nobody served us for an hour…”"
             onChange={(e) => setText(e.target.value)}
           />
         </label>
@@ -74,7 +74,7 @@ export default function AddReview({ onAdded }: { onAdded: (id: string) => void }
         </div>
         <label className="field">
           Reviewer name (optional)
-          <input type="text" value={author} onChange={(e) => setAuthor(e.target.value)} />
+          <input type="text" value={author} placeholder="e.g. Dan K." onChange={(e) => setAuthor(e.target.value)} />
         </label>
         {error && <p className="notice notice-error">{error}</p>}
         <button type="submit" className="btn btn-primary">

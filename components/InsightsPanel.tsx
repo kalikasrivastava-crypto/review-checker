@@ -1,6 +1,7 @@
 "use client";
 
 import FootfallView from "./FootfallView";
+import Hint from "./Hint";
 import { useApp } from "./AppProvider";
 
 export default function InsightsPanel() {
@@ -28,7 +29,9 @@ export default function InsightsPanel() {
   return (
     <div className="stack">
       <section className="panel">
-        <h2>Footfall vs. claimed visits</h2>
+        <h2>
+          How busy you were vs. visits reviews claim <Hint tip="Footfall means how many guests came on each day, counted from your bills." />
+        </h2>
         {data.footfall ? (
           <>
             <p className="muted">

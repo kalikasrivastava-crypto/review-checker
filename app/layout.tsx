@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Fraunces, Geist, Noto_Sans_Devanagari } from "next/font/google";
 import "./globals.css";
 import AppProvider from "@/components/AppProvider";
+import OnboardingLayer from "@/components/OnboardingLayer";
 
 const fraunces = Fraunces({
   variable: "--font-serif",
@@ -31,7 +32,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${fraunces.variable} ${geist.variable} ${devanagari.variable}`}>
       <body>
-        <AppProvider>{children}</AppProvider>
+        <AppProvider>
+          <OnboardingLayer />
+          {children}
+        </AppProvider>
       </body>
     </html>
   );

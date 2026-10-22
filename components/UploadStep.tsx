@@ -7,6 +7,7 @@ import {
   mapReservations,
   MAX_UPLOAD_ROWS,
   REQUIRED_FIELDS,
+  rowProblems,
   splitCsv,
   type Mapping,
   type Order,
@@ -75,6 +76,7 @@ export default function UploadStep({ kind, onUse }: Props) {
   const result = rows.length ? (kind === "bills" ? mapOrders(rows, mapping) : mapReservations(rows, mapping)) : null;
   const missing = REQUIRED_FIELDS.filter((f) => mapping[f] === undefined);
   const ready = !!result && missing.length === 0 && result.records.length > 0;
+  const issues = rows.length && missing.length === 0 ? rowProblems(rows, mapping) : null;
 
   function reset() {
     setFileName("");
@@ -86,17 +88,20 @@ export default function UploadStep({ kind, onUse }: Props) {
   return (
     <div className="upload-step">
       <label className="field">
-        {kind === "bills" ? "Bills CSV" : "Reservations CSV"}
+        {kind === "bills" ? "Upload your bills file (CSV)" : "Upload your reservations file (CSV)"}
         <input type="file" accept=".csv,text/csv" onChange={(e) => onFile(e.target.files?.[0])} />
       </label>
       {error && <p className="notice notice-error">{error}</p>}
 
       {headers.length > 0 && (
         <>
-          <p className="muted">
-            <strong>Step 2: match your columns.</strong> We guessed from the headers in {fileName}. Change any that are
-            wrong. Dates like 13/10/2026 are read day first.
-          </p>
+          <details className="mapping-details" open={missing.length > 0}>
+            <summary>
+              {missing.length > 0 ? "Tell us which column is which" : "Columns matched. Change them if something looks wrong"}
+            </summary>
+            <p className="muted small">
+              We guessed from the headers in {fileName}. Dates like 13/10/2026 are read day first.
+            </p>
           <div className="mapping-grid">
             {FIELDS[kind].map(({ field, label }) => (
               <label className="field" key={field}>
@@ -123,6 +128,7 @@ export default function UploadStep({ kind, onUse }: Props) {
               </label>
             ))}
           </div>
+          </details>
 
           {missing.length > 0 && (
             <p className="notice notice-warning">
@@ -134,11 +140,23 @@ export default function UploadStep({ kind, onUse }: Props) {
             <>
               <p>
                 <strong>{result.records.length.toLocaleString()}</strong> rows ready
-                {result.skipped > 0 && <>, {result.skipped.toLocaleString()} skipped (bad date, time or party size)</>}.
+                {result.skipped > 0 && <>, {result.skipped.toLocaleString()} can&apos;t be read and will be skipped</>}.
               </p>
+              {issues && issues.problems.length > 0 && (
+                <div className="notice notice-warning" role="alert">
+                  <strong>Please check these rows:</strong>
+                  <ul className="issue-list">
+                    {issues.problems.map((p, i) => (
+                      <li key={i}>{p}</li>
+                    ))}
+                  </ul>
+                  {issues.total > issues.problems.length && <p className="small">…and {issues.total - issues.problems.length} more.</p>}
+                </div>
+              )}
+              <p className="muted small">First rows of your file:</p>
               {result.records.length > 0 && (
                 <ul className="preview-list">
-                  {(result.records as (Order | Reservation)[]).slice(0, 3).map((r, i) => (
+                  {(result.records as (Order | Reservation)[]).slice(0, 5).map((r, i) => (
                     <li key={i}>
                       {r.date} {minutesToText(r.minutes)} · party of {r.partySize}
                       {"items" in r && r.items ? ` · ${r.items.slice(0, 40)}` : ""}

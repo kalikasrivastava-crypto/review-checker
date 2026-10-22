@@ -1,13 +1,18 @@
 "use client";
 
+import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import reviewsData from "@/data/reviews.json";
 import { hashString } from "@/lib/sig";
 import { useHydrated, usePersisted } from "@/lib/store";
 import type { Insights } from "@/lib/insights";
 import type { CustomRecords } from "@/lib/records";
-import { normalizeSettings, type RestaurantSettings } from "@/lib/settings";
-import type { CheckResponse, CheckResult, ReviewItem } from "@/lib/types";
+import { DEMO_CLAIMS, DEMO_FIRST_REVIEW_ID } from "@/lib/demo";
+import { DEMO_SETTINGS, normalizeSettings, type RestaurantSettings } from "@/lib/settings";
+import type { CheckResponse, CheckResult, Claim, ReviewItem } from "@/lib/types";
+
+export type Mode = "demo" | "own";
+export type Tab = "dashboard" | "inbox" | "insights" | "records" | "restaurant";
 
 export type Status = "new" | "checked" | "replied" | "reported";
 
@@ -58,7 +63,7 @@ interface AppValue {
   setReply: (id: string, key: string, draft: ReplyDraft) => void;
   /** Removes a review the owner added, with its check and drafts. Demo reviews can't be deleted. */
   deleteReview: (id: string) => void;
-  addReview: (r: { text: string; rating: number; date: string; author?: string }) => string;
+  addReview: (r: { text: string; rating: number; date: string; author?: string; claims?: Claim[] }, opts?: { check?: boolean }) => string;
   check: (ids: string[], opts?: { force?: boolean }) => number;
   cancelQueue: () => void;
   queue: QueueView;
@@ -73,6 +78,27 @@ interface AppValue {
   acquireAi: () => Promise<void>;
   toast: (message: string, kind?: ToastKind) => void;
   anchorDate: Date;
+  /** "demo" = the sample restaurant, "own" = the owner's restaurant, null = first visit. */
+  mode: Mode | null;
+  tab: Tab;
+  setTab: (t: Tab) => void;
+  selectedId: string | null;
+  setSelectedId: (id: string | null) => void;
+  /** Loads the sample restaurant and opens Dan K.'s review with its case report already filled in. */
+  startDemo: (opts?: { tour?: boolean }) => Promise<void>;
+  /** Starts the owner's own setup (leaves the sample behind). */
+  startSetup: () => void;
+  finishSetup: (next: RestaurantSettings) => void;
+  /** True once the owner has checked a first review or chosen to skip that step. */
+  firstReviewDone: boolean;
+  skipFirstReview: () => void;
+  tourOpen: boolean;
+  tourStep: number;
+  setTourStep: (n: number) => void;
+  startTour: () => void;
+  endTour: () => void;
+  helpOpen: boolean;
+  setHelpOpen: (open: boolean) => void;
 }
 
 const Ctx = createContext<AppValue | null>(null);
@@ -109,11 +135,15 @@ const IDLE_QUEUE: QueueView = {
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-function recordsSig(custom: CustomRecords | null): string {
-  return custom
-    ? `custom:${custom.orders?.length ?? 0}:${custom.ordersName}:${custom.reservations?.length ?? 0}:${custom.reservationsName}`
-    : "demo";
+function recordsSig(custom: CustomRecords | null, mode: Mode | null): string {
+  if (custom) return `custom:${custom.orders?.length ?? 0}:${custom.ordersName}:${custom.reservations?.length ?? 0}:${custom.reservationsName}`;
+  return mode === "own" ? "none" : "demo";
 }
+
+const reviewSig = (r: { text: string; rating: number; date: string }, ctx: string) =>
+  hashString(`${r.text}|${r.rating}|${r.date}|${ctx}`);
+
+const presetClaimsOf = (r: ReviewItem): Claim[] | undefined => r.claims ?? (r.source === "demo" ? DEMO_CLAIMS[r.id] : undefined);
 
 export default function AppProvider({ children }: { children: React.ReactNode }) {
   const hydrated = useHydrated();
@@ -124,21 +154,39 @@ export default function AppProvider({ children }: { children: React.ReactNode })
   const [savedSettings, setSettings] = usePersisted<RestaurantSettings | null>("dt-settings-v1", null);
   const settings = useMemo(() => (savedSettings ? normalizeSettings(savedSettings) : null), [savedSettings]);
 
+  // Which setup the owner is in. People who set up before this existed keep their data: the sample
+  // restaurant's name means sample mode, anything else means their own restaurant.
+  const [savedMode, setMode] = usePersisted<Mode | null>("dt-mode-v1", null);
+  const mode: Mode | null = savedMode ?? (savedSettings ? (savedSettings.name === DEMO_SETTINGS.name ? "demo" : "own") : null);
+  const [firstSkipped, setFirstSkipped] = usePersisted<boolean>("dt-first-skip-v1", false);
+  const [, setTourSeen] = usePersisted<boolean>("dt-tour-seen-v1", false);
+
   const reviews = useMemo(
-    () => [...DEMO_REVIEWS, ...added].sort((a, b) => b.date.localeCompare(a.date)),
-    [added],
+    () =>
+      [...(mode === "demo" ? DEMO_REVIEWS : []), ...added.filter((r) => !r.workspace || r.workspace === (mode ?? "demo"))].sort((a, b) =>
+        b.date.localeCompare(a.date),
+      ),
+    [added, mode],
   );
   // "This week" is measured from the newest review, so the demo data always has a current week.
   const anchorDate = useMemo(
-    () => new Date(Math.max(...reviews.map((r) => new Date(r.date).getTime()))),
+    () => new Date(reviews.length ? Math.max(...reviews.map((r) => new Date(r.date).getTime())) : 0),
     [reviews],
   );
 
-  const ctxSig = `${recordsSig(customRecords)}|${settings ? hashString(JSON.stringify(settings)) : "demo"}`;
-  const sigOf = useCallback(
-    (r: ReviewItem) => hashString(`${r.text}|${r.rating}|${r.date}|${ctxSig}`),
-    [ctxSig],
-  );
+  const settingsSig = settings ? hashString(JSON.stringify(settings)) : "demo";
+  const ctxSig = `${recordsSig(customRecords, mode)}|${settingsSig}`;
+  const sigOf = useCallback((r: ReviewItem) => reviewSig(r, ctxSig), [ctxSig]);
+  const firstReviewDone = firstSkipped || added.some((r) => r.workspace === "own");
+
+  // ---- where the owner is in the app ----
+  const [tab, setTab] = useState<Tab>("dashboard");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [tourOpen, setTourOpen] = useState(false);
+  const [tourStep, setTourStep] = useState(0);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
 
   // ---- toasts ----
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -150,9 +198,9 @@ export default function AppProvider({ children }: { children: React.ReactNode })
   }, []);
 
   // ---- latest values for the async queue ----
-  const latest = useRef({ reviews, entries, customRecords, settings, sigOf });
+  const latest = useRef({ reviews, entries, customRecords, settings, sigOf, mode });
   useEffect(() => {
-    latest.current = { reviews, entries, customRecords, settings, sigOf };
+    latest.current = { reviews, entries, customRecords, settings, sigOf, mode };
   });
 
   const entryOf = useCallback((id: string): Entry => entries[id] ?? NEW_ENTRY, [entries]);
@@ -195,8 +243,9 @@ export default function AppProvider({ children }: { children: React.ReactNode })
     [setEntries],
   );
 
+  const autoCheck = useRef<string | null>(null);
   const addReview = useCallback(
-    (r: { text: string; rating: number; date: string; author?: string }) => {
+    (r: { text: string; rating: number; date: string; author?: string; claims?: Claim[] }, opts?: { check?: boolean }) => {
       const id = `a-${Date.now().toString(36)}`;
       const item: ReviewItem = {
         id,
@@ -205,8 +254,11 @@ export default function AppProvider({ children }: { children: React.ReactNode })
         date: r.date,
         text: r.text.trim(),
         source: "added",
+        workspace: latest.current.mode ?? "demo",
+        ...(r.claims ? { claims: r.claims } : {}),
       };
       setAdded((prev) => [...prev, item]);
+      if (opts?.check) autoCheck.current = id;
       return id;
     },
     [setAdded],
@@ -257,7 +309,7 @@ export default function AppProvider({ children }: { children: React.ReactNode })
     let busyRetries = 0;
     while (w.ids.length > 0 && !w.cancelled) {
       const id = w.ids[0];
-      const { reviews: all, customRecords: custom, settings: owner, sigOf: sig } = latest.current;
+      const { reviews: all, customRecords: custom, settings: owner, sigOf: sig, mode: nowMode } = latest.current;
       const review = all.find((r) => r.id === id);
       if (!review) {
         w.ids.shift();
@@ -265,14 +317,16 @@ export default function AppProvider({ children }: { children: React.ReactNode })
         continue;
       }
       const readyAt = Math.max(gate.current.last + GAP_MS, Date.now());
-      if (readyAt > Date.now() + 500) {
+      if (!presetClaimsOf(review) && readyAt > Date.now() + 500) {
         syncQueue({
           message: "Waiting a few seconds to stay within the free AI limit",
           waitUntil: readyAt,
           currentId: id,
         });
       }
-      await acquireAi();
+      // Sample and example reviews have their claims ready, so they don't use the AI or its free-tier gap.
+      const preset = presetClaimsOf(review);
+      if (!preset) await acquireAi();
       if (w.cancelled) break;
       syncQueue({ message: `Checking ${review.author}…`, waitUntil: null, currentId: id });
 
@@ -290,8 +344,13 @@ export default function AppProvider({ children }: { children: React.ReactNode })
             others: all
               .filter((o) => o.id !== review.id)
               .map((o) => ({ id: o.id, author: o.author, rating: o.rating, date: o.date, text: o.text })),
-            ...(custom ? { records: { orders: custom.orders ?? [], reservations: custom.reservations ?? [] } } : {}),
+            ...(custom
+              ? { records: { orders: custom.orders ?? [], reservations: custom.reservations ?? [] } }
+              : nowMode === "own"
+                ? { records: { orders: [], reservations: [] } }
+                : {}),
             ...(owner ? { settings: owner } : {}),
+            ...(preset ? { claims: preset } : {}),
           }),
         });
         out = (await res.json()) as CheckResponse;
@@ -371,6 +430,15 @@ export default function AppProvider({ children }: { children: React.ReactNode })
     [runQueue, syncQueue],
   );
 
+  // A review added with { check: true } is checked as soon as it shows up in the list.
+  useEffect(() => {
+    const id = autoCheck.current;
+    if (id && reviews.some((r) => r.id === id)) {
+      autoCheck.current = null;
+      check([id]);
+    }
+  }, [reviews, check]);
+
   const cancelQueue = useCallback(() => {
     const w = work.current;
     w.cancelled = true;
@@ -404,10 +472,12 @@ export default function AppProvider({ children }: { children: React.ReactNode })
         reviews: reviews.map((r) => ({ id: r.id, author: r.author, rating: r.rating, date: r.date, text: r.text })),
         ...(customRecords
           ? { records: { orders: customRecords.orders ?? [], reservations: customRecords.reservations ?? [] } }
-          : {}),
+          : mode === "own"
+            ? { records: { orders: [], reservations: [] } }
+            : {}),
         ...(settings ? { settings } : {}),
       }),
-    [reviews, customRecords, settings],
+    [reviews, customRecords, settings, mode],
   );
   useEffect(() => {
     if (!hydrated) return;
@@ -424,6 +494,86 @@ export default function AppProvider({ children }: { children: React.ReactNode })
       cancelled = true;
     };
   }, [insightsBody, hydrated]);
+
+  // ---- sample data, setup, tour ----
+  const startTour = useCallback(() => {
+    setTab("inbox");
+    setTourStep(0);
+    setTourOpen(true);
+  }, []);
+  const endTour = useCallback(() => {
+    setTourOpen(false);
+    setTourSeen(true);
+  }, [setTourSeen]);
+
+  /** Fills in the sample reviews' case reports from their saved claims. The checks run in code; no AI call. */
+  const startDemo = useCallback(
+    async (opts: { tour?: boolean } = {}) => {
+      const demoSettings = normalizeSettings(DEMO_SETTINGS);
+      const ctx = `demo|${hashString(JSON.stringify(demoSettings))}`;
+      const others = DEMO_REVIEWS.map((o) => ({ id: o.id, author: o.author, rating: o.rating, date: o.date, text: o.text }));
+      const seeded: Record<string, Entry> = {};
+      await Promise.all(
+        DEMO_REVIEWS.filter((r) => DEMO_CLAIMS[r.id]).map(async (r) => {
+          try {
+            const res = await fetch("/api/check", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                id: r.id,
+                author: r.author,
+                text: r.text,
+                date: r.date,
+                rating: r.rating,
+                others: others.filter((o) => o.id !== r.id),
+                settings: demoSettings,
+                claims: DEMO_CLAIMS[r.id],
+              }),
+            });
+            const out = (await res.json()) as CheckResponse;
+            if (out.ok) seeded[r.id] = { status: "checked", result: out.result, sig: reviewSig(r, ctx), checkedAt: new Date().toISOString() };
+          } catch {
+            // The review can still be checked later from the inbox.
+          }
+        }),
+      );
+      work.current.ids = [];
+      setMode("demo");
+      setCustomRecords(null);
+      setSettings(DEMO_SETTINGS);
+      setAdded([]);
+      setEntries(seeded);
+      setTab("inbox");
+      setSelectedId(DEMO_FIRST_REVIEW_ID);
+      if (pathname !== "/") router.push("/");
+      if (opts.tour !== false) {
+        setTourStep(0);
+        setTourOpen(true);
+      }
+    },
+    [pathname, router, setAdded, setCustomRecords, setEntries, setMode, setSettings],
+  );
+
+  const startSetup = useCallback(() => {
+    work.current.ids = [];
+    setTourOpen(false);
+    setMode("own");
+    setSettings(null);
+    setCustomRecords(null);
+    setAdded([]);
+    setEntries({});
+    setSelectedId(null);
+    setTab("dashboard");
+    if (pathname !== "/") router.push("/");
+  }, [pathname, router, setAdded, setCustomRecords, setEntries, setMode, setSettings]);
+
+  const finishSetup = useCallback(
+    (next: RestaurantSettings) => {
+      setMode("own");
+      setSettings(next);
+    },
+    [setMode, setSettings],
+  );
 
   const value: AppValue = {
     hydrated,
@@ -447,6 +597,23 @@ export default function AppProvider({ children }: { children: React.ReactNode })
     acquireAi,
     toast,
     anchorDate,
+    mode,
+    tab,
+    setTab,
+    selectedId,
+    setSelectedId,
+    startDemo,
+    startSetup,
+    finishSetup,
+    firstReviewDone,
+    skipFirstReview: () => setFirstSkipped(true),
+    tourOpen,
+    tourStep,
+    setTourStep,
+    startTour,
+    endTour,
+    helpOpen,
+    setHelpOpen,
   };
 
   return (

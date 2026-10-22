@@ -24,6 +24,10 @@ export interface ReviewItem extends Review {
   id: string;
   author: string;
   source: "demo" | "added";
+  /** Which setup the review belongs to: the sample restaurant or the owner's own. */
+  workspace?: "demo" | "own";
+  /** Claims already pulled out (sample and example reviews), so checking it needs no AI call. */
+  claims?: Claim[];
 }
 
 export type ErrorCode = "no_key" | "busy" | "timeout" | "unavailable" | "refused" | "empty" | "bad_input" | "unreadable";

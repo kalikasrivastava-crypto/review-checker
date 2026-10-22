@@ -11,8 +11,18 @@ A daily tool for restaurant owners to tell fair bad Google reviews from suspicio
 | **Case Report** (one screen per checked review) | The review as a quote with every claim underlined (green matches, red conflicts, dotted grey can't verify). A HIGH / MEDIUM / LOW RISK stamp with a small score beside it and a 2-3 sentence plain-English explanation that gives only confirmed conflicts as reasons. "Claim by claim" in three groups: **Confirmed mismatch** (your records contradict it), **Confirmed match** (your records support it) and **Can't verify / missing data** (opinions like rude staff or cold food, or no data for that day), each claim with its evidence and a source label (POS bills, Reservations, Opening hours, Restaurant settings, Footfall). A "How this score was calculated" toggle lists every point and jumps to the claim it came from. Then one recommended next step by risk level, a ready-made reply in English, Hindi or Hinglish (no AI needed), PDF, WhatsApp and mark as replied. Reviews you added yourself can be deleted, with a confirm step. |
 | **Insights** | Footfall calendar (how busy each day was, next to the days bad reviews claim visits), complaints grouped by theme, and look-alike reviews. |
 | **Records** | Upload bills and reservations as CSV with a column-mapping step, or use the demo data. Sample CSVs to download. |
-| **My Restaurant** | Name, contact details, opening hours per day with lunch and dinner times, number of tables, seats per table, how long a party keeps a table, and the largest party you can seat. Every check uses these, including whether enough tables were free at the time a review says it visited. A first-time setup walks you through it, with a "demo restaurant" shortcut. |
+| **My Restaurant** | Name, contact details, opening hours (same every day, or per day, with a Closed toggle and lunch and dinner times), number of tables, seats per table, how long a party keeps a table, and the largest party you can seat. Every check uses these, including whether enough tables were free at the time a review says it visited. "Reset to sample data" puts the sample restaurant back. |
 | **About** (`/about`) | A short page on the problem, how it works and privacy, with a "Try the demo" button. |
+
+### First-time experience
+
+A new visitor sees a welcome screen: a one-line headline, the three steps (add your records, pick a review, get a case report) and two buttons.
+
+- **Try with sample data** loads a made-up restaurant and opens Dan K.'s review with its case report already filled in from a saved result (no AI call). A four-step tour points at the risk level, the conflicting claims, the missing data and the next step, and can be skipped. A banner on every page says you are viewing sample data and links to setup.
+- **Set up my restaurant** is three short steps with a progress bar: details, hours and tables (sensible defaults pre-filled), then optional bills and reservations. Each upload box has a CSV template (`public/dinetrust-bills-template.csv`, `public/dinetrust-reservations-template.csv`), a column table, a preview of the first five rows and plain row errors such as "Row 7: time 'late' should look like 20:00". "Skip for now" is always there. After setup, "Check your first review" has a paste box and an **Use an example review** button that shows a result straight away.
+- The **?** button in the header reopens the tour, the templates, "What data do I need?" and a five-question FAQ.
+
+The sample reviews and the example review ship with their claims already pulled out (`lib/demo.ts`), so `/api/check` can skip the AI and run only the code checks.
 
 Everything you do is saved in your browser, so a refresh keeps your statuses, checks, drafts, records and settings.
 
@@ -122,7 +132,7 @@ Open `.env.local` and paste your key after `GEMINI_API_KEY=` (no spaces or quote
 npm run dev
 ```
 
-Open http://localhost:3000 and either finish the short setup or choose "Skip and use the demo restaurant". Restart `npm run dev` after changing `.env.local`.
+Open http://localhost:3000 and choose "Try with sample data" or "Set up my restaurant". Restart `npm run dev` after changing `.env.local`.
 
 **On Vercel:** set `GEMINI_API_KEY` (and optionally the two model variables) under Project → Settings → Environment Variables, then redeploy.
 
@@ -139,5 +149,5 @@ app/api/insights/route.ts dashboard data, footfall, themes, look-alike reviews (
 components/               Dashboard, Inbox, ReviewDetail, ReplyComposer, SettingsPanel, ...
 lib/                      ai, prompts, checks, similarity, insights, settings, records, pdf, store, ...
 data/                     reviews.json, orders.csv, reservations.csv (demo data)
-public/                   sample-bills.csv, sample-reservations.csv
+public/                   sample CSVs and the two CSV templates
 ```

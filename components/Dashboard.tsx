@@ -21,7 +21,7 @@ function Delta({ value, unit = "", invert = false }: { value: number | null; uni
 }
 
 export default function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
-  const { reviews, entries, entryOf, insights, insightsLoading, anchorDate, check, queue, hydrated } = useApp();
+  const { reviews, entries, entryOf, insights, insightsLoading, anchorDate, check, queue, hydrated, setTab } = useApp();
 
   if (!hydrated || (insightsLoading && !insights)) {
     return (
@@ -37,6 +37,20 @@ export default function Dashboard({ onOpen }: { onOpen: (id: string) => void }) 
           ))}
         </div>
       </div>
+    );
+  }
+
+  if (reviews.length === 0) {
+    return (
+      <section className="panel empty-state">
+        <h2>No reviews yet</h2>
+        <p className="muted">Add the first bad review you want to check. DineTrust will compare it with your records.</p>
+        <div className="actions">
+          <button type="button" className="btn btn-solid" onClick={() => setTab("inbox")}>
+            Go to the Inbox to add one
+          </button>
+        </div>
+      </section>
     );
   }
 
@@ -65,7 +79,7 @@ export default function Dashboard({ onOpen }: { onOpen: (id: string) => void }) 
           <h2 className="stat-label">Suspicious</h2>
           <p className="stat-value">{stats.suspiciousPct === null ? "–" : `${stats.suspiciousPct}%`}</p>
           <span className="card-sub">
-            {stats.suspiciousCount} of {reviews.length} reviews ({stats.checkedCount} AI-checked)
+            {stats.suspiciousCount} of {reviews.length} reviews ({stats.checkedCount} checked)
           </span>
         </section>
         <section className="panel stat-card">

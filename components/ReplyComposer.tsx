@@ -181,6 +181,7 @@ export default function ReplyComposer({
             lang={language === "hi" ? "hi" : "en"}
             value={text}
             rows={5}
+            placeholder="Your reply will appear here. You can edit it before you copy it."
             onChange={(e) => setReply(review.id, key, { text: e.target.value, at: new Date().toISOString(), source: "own" })}
           />
           <p className="draft-source muted small">

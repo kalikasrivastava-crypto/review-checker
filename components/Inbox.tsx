@@ -132,7 +132,7 @@ export default function Inbox({ selectedId, onSelect }: { selectedId: string | n
               </select>
             </label>
             <label className="field">
-              Verdict
+              Result
               <select value={filters.verdict} onChange={(e) => set("verdict", e.target.value as Filters["verdict"])}>
                 <option value="all">All</option>
                 <option value="unchecked">Not checked yet</option>
@@ -242,7 +242,17 @@ export default function Inbox({ selectedId, onSelect }: { selectedId: string | n
                         <EntryBadges entry={entry} />
                         {queued.has(r.id) && <span className="tag">{queue.currentId === r.id ? "Checking…" : "Queued"}</span>}
                         {tags.map((t) => (
-                          <span key={t} className={t === "Part of a burst" ? "tag tag-burst" : "tag"}>
+                          <span
+                            key={t}
+                            className={t === "Part of a burst" ? "tag tag-burst" : "tag"}
+                            title={
+                              t === "Part of a burst"
+                                ? "Three or more 1-star reviews were posted within 24 hours of each other."
+                                : t === "Low detail"
+                                  ? "Strong feeling, but no names, dishes or times that could be checked."
+                                  : undefined
+                            }
+                          >
                             {t}
                           </span>
                         ))}

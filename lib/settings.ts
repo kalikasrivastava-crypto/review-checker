@@ -57,22 +57,22 @@ export const DEMO_SETTINGS: RestaurantSettings = {
   },
 };
 
-/** A fresh form for a new owner: lunch and dinner every day, nothing filled in yet. */
+/** A fresh form for a new owner: lunch and dinner every day with typical times, only the name left to fill in. */
 export const BLANK_SETTINGS: RestaurantSettings = {
   name: "",
   phone: "",
   email: "",
-  tables: 10,
+  tables: 12,
   seatsPerTable: DEFAULT_SEATS_PER_TABLE,
   mealMinutes: DEFAULT_MEAL_MINUTES,
-  maxPartySize: 8,
+  maxPartySize: 10,
   days: Object.fromEntries(
     WEEKDAYS.map((d) => [
       d,
       {
         open: true,
-        lunch: { on: false, start: "12:00", end: "15:00" },
-        dinner: { on: true, start: "18:00", end: "22:30" },
+        lunch: { on: true, start: "12:00", end: "15:00" },
+        dinner: { on: true, start: "19:00", end: "23:00" },
       },
     ]),
   ) as Record<Weekday, DaySettings>,

@@ -3,7 +3,7 @@ import { buildChecks, isBurst, settleVerdict, visitInfo } from "@/lib/checks";
 import { mostSimilar } from "@/lib/similarity";
 import { buildRecords } from "@/lib/records-server";
 import { SCORE_SYSTEM, scoreUser } from "@/lib/prompts";
-import { parseAiReading, sanitizeReviews, validateReviewInput } from "@/lib/validate";
+import { normalizeClaims, parseAiReading, sanitizeReviews, validateReviewInput } from "@/lib/validate";
 import type { AiReading, CheckResponse } from "@/lib/types";
 
 // Allow time for the slower fallback model.
@@ -25,8 +25,11 @@ export async function POST(request: Request) {
   if ("error" in checked) return reply({ ok: false, error: checked.error, code: "bad_input" }, 400);
   const { review } = checked;
 
+  // Sample and example reviews come with their claims already pulled out, so no AI call is needed.
+  const preset = normalizeClaims((input as { claims?: unknown } | null)?.claims);
+
   // AI call 1: read the review. One automatic retry if the answer isn't valid JSON.
-  let reading: AiReading | null = null;
+  let reading: AiReading | null = preset.length > 0 ? { is_review: true, claims: preset } : null;
   try {
     for (let attempt = 0; attempt < 2 && !reading; attempt++) {
       reading = parseAiReading(await askAI(SCORE_SYSTEM, scoreUser(review), true));

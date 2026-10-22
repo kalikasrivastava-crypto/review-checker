@@ -159,6 +159,27 @@ export function mapReservations(rows: string[][], mapping: Mapping): MapResult<R
   }) as MapResult<Reservation>;
 }
 
+/**
+ * Plain-language problems in the rows (row 1 is the header, so the first data row is row 2).
+ * Returns the first few, e.g. "Row 7: time 'late' should look like 20:00 (or 8:15 PM)".
+ */
+export function rowProblems(rows: string[][], mapping: Mapping, limit = 5): { problems: string[]; total: number } {
+  const problems: string[] = [];
+  let total = 0;
+  rows.forEach((row, i) => {
+    if (row.every((c) => !c.trim())) return;
+    const cell = (f: RecordField) => (mapping[f] === undefined ? "" : (row[mapping[f] as number] ?? "").trim());
+    const found: string[] = [];
+    if (normalizeDate(cell("date")) === null) found.push(`date '${cell("date")}' should look like 2026-10-17`);
+    if (normalizeTime(cell("time")) === null) found.push(`time '${cell("time")}' should look like 20:00 (or 8:15 PM)`);
+    if (normalizePartySize(cell("party_size")) === null) found.push(`party_size '${cell("party_size")}' should be a number like 4`);
+    if (found.length === 0) return;
+    total++;
+    if (problems.length < limit) problems.push(`Row ${i + 2}: ${found.join("; ")}`);
+  });
+  return { problems, total };
+}
+
 /** The first row is the header. */
 export function splitCsv(text: string): { headers: string[]; rows: string[][] } {
   const [headers = [], ...rows] = parseCsv(text);

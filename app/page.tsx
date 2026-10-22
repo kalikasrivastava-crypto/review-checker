@@ -1,18 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import Inbox from "@/components/Inbox";
 import Dashboard from "@/components/Dashboard";
 import InsightsPanel from "@/components/InsightsPanel";
+import FirstReview from "@/components/FirstReview";
+import Masthead from "@/components/Masthead";
 import Onboarding from "@/components/Onboarding";
+import Welcome from "@/components/Welcome";
 import QueueBar from "@/components/QueueBar";
 import RecordsPanel from "@/components/RecordsPanel";
 import SettingsPanel from "@/components/SettingsPanel";
-import { useApp } from "@/components/AppProvider";
+import { useApp, type Tab } from "@/components/AppProvider";
 
 const DEMO_COUNTS = { bills: 25, reservations: 10 };
-type Tab = "dashboard" | "inbox" | "insights" | "records" | "restaurant";
 const TABS: { id: Tab; label: string }[] = [
   { id: "dashboard", label: "Dashboard" },
   { id: "inbox", label: "Inbox" },
@@ -22,28 +23,24 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 export default function Home() {
-  const { customRecords, setCustomRecords, settings, hydrated, toast } = useApp();
-  const [tab, setTab] = useState<Tab>("dashboard");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { customRecords, setCustomRecords, settings, hydrated, toast, mode, tab, setTab, selectedId, setSelectedId, reviews, firstReviewDone } = useApp();
 
   if (!hydrated) {
     return (
       <div className="shell">
         <header className="masthead">
           <h1>DineTrust</h1>
-          <p>Check a suspicious Google review against your own records, then reply calmly.</p>
+          <p>Check a bad Google review against your own records, then reply calmly.</p>
         </header>
       </div>
     );
   }
-  if (!settings) return <Onboarding />;
+  if (!settings) return mode === null ? <Welcome /> : <Onboarding />;
+  if (mode === "own" && reviews.length === 0 && !firstReviewDone) return <FirstReview />;
 
   return (
     <div className="shell">
-      <header className="masthead">
-        <h1>DineTrust</h1>
-        <p>{settings.name ? `${settings.name} · ` : ""}Check a suspicious Google review against your own records, then reply calmly.</p>
-      </header>
+      <Masthead subtitle={`${settings.name ? `${settings.name} · ` : ""}Check a bad Google review against your own records, then reply calmly.`} />
 
       <nav className="tabs" role="tablist" aria-label="Sections">
         {TABS.map((t) => (
@@ -93,10 +90,11 @@ export default function Home() {
         <div role="tabpanel" id="panel-records" aria-labelledby="tab-records" className="narrow">
           <RecordsPanel
             custom={customRecords}
+            mode={mode}
             demoCounts={DEMO_COUNTS}
             onChange={(next) => {
               setCustomRecords(next);
-              toast(next ? "Your records are saved on this device" : "Back to the demo records", "success");
+              toast(next ? "Your records are saved on this device" : mode === "demo" ? "Back to the sample records" : "Your uploaded records were removed", "success");
             }}
           />
         </div>

@@ -26,7 +26,7 @@ export default function RemovalReport({
       <label className="sr-only" htmlFor="removal-report">
         Removal report
       </label>
-      <textarea id="removal-report" value={text} rows={9} onChange={(e) => setText(e.target.value)} />
+      <textarea id="removal-report" value={text} rows={9} placeholder="The text to send to Google will appear here." onChange={(e) => setText(e.target.value)} />
       <div className="actions">
         {onPdf && (
           <button type="button" className="btn btn-solid" onClick={onPdf}>

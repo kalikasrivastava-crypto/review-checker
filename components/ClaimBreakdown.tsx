@@ -83,7 +83,7 @@ export default function ClaimBreakdown({ groups, visit, focusId }: { groups: Cla
           <span>
             <strong>{visit.label}</strong> was {busy}: {visit.bills} bill{visit.bills === 1 ? "" : "s"}, {visit.covers} guests.
           </span>
-          <span className="source-tag">Footfall</span>
+          <span className="source-tag">Visitor counts</span>
         </p>
       )}
       <Group

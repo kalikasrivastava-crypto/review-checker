@@ -37,6 +37,26 @@ function str(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
+/** Turns a list of claims (from the AI, or from a saved example) into clean Claim objects. */
+export function normalizeClaims(list: unknown): Claim[] {
+  if (!Array.isArray(list)) return [];
+  const claims: Claim[] = [];
+  for (const c of list.slice(0, 40) as Record<string, unknown>[]) {
+    if (!c || typeof c.text !== "string" || !c.text.trim()) continue;
+    claims.push({
+      text: c.text.trim().slice(0, 300),
+      // An unfamiliar label is treated as a general claim rather than failing the whole check.
+      type: CLAIM_TYPES.includes(c.type as ClaimType) ? (c.type as ClaimType) : "other",
+      party_size: typeof c.party_size === "number" ? c.party_size : null,
+      weekday: str(c.weekday)?.toLowerCase() ?? null,
+      date: str(c.date),
+      time: str(c.time),
+      item: str(c.item),
+    });
+  }
+  return claims;
+}
+
 /** Checks the AI's answer has the expected shape. Returns null if it doesn't. */
 export function parseAiReading(raw: string): AiReading | null {
   const start = raw.indexOf("{");
@@ -51,20 +71,7 @@ export function parseAiReading(raw: string): AiReading | null {
   if (typeof data.is_review !== "boolean") return null;
   if (!Array.isArray(data.claims)) return null;
 
-  const claims: Claim[] = [];
-  for (const c of data.claims as Record<string, unknown>[]) {
-    if (!c || typeof c.text !== "string" || !c.text.trim()) continue;
-    claims.push({
-      text: c.text.trim(),
-      // An unfamiliar label from the AI is treated as a general claim rather than failing the whole check.
-      type: CLAIM_TYPES.includes(c.type as ClaimType) ? (c.type as ClaimType) : "other",
-      party_size: typeof c.party_size === "number" ? c.party_size : null,
-      weekday: str(c.weekday)?.toLowerCase() ?? null,
-      date: str(c.date),
-      time: str(c.time),
-      item: str(c.item),
-    });
-  }
+  const claims = normalizeClaims(data.claims);
   return { is_review: data.is_review, claims };
 }
 

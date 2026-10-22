@@ -6,7 +6,8 @@ import { useApp } from "./AppProvider";
 import { BLANK_SETTINGS, DEMO_SETTINGS, settingsIssues, type RestaurantSettings } from "@/lib/settings";
 
 export default function SettingsPanel() {
-  const { settings, setSettings, toast, entries } = useApp();
+  const { settings, setSettings, toast, entries, startDemo } = useApp();
+  const [confirmReset, setConfirmReset] = useState(false);
   const [draft, setDraft] = useState<RestaurantSettings>(() => settings ?? BLANK_SETTINGS);
 
   const issues = settingsIssues(draft);
@@ -46,11 +47,40 @@ export default function SettingsPanel() {
             className="btn"
             onClick={() => {
               setDraft(DEMO_SETTINGS);
-              toast("Demo restaurant loaded. Press Save to keep it.", "info");
+              toast("Sample details filled in. Press Save to keep them.", "info");
             }}
           >
-            Load the demo restaurant
+            Fill in with the sample restaurant
           </button>
+        </div>
+        <div className="reset-box">
+          {confirmReset ? (
+            <>
+              <p className="small">
+                This replaces your restaurant details, records, checks and added reviews with the sample restaurant.
+              </p>
+              <div className="actions">
+                <button
+                  type="button"
+                  className="btn btn-small btn-danger"
+                  onClick={async () => {
+                    setConfirmReset(false);
+                    await startDemo({ tour: false });
+                    toast("Back to the sample data", "success");
+                  }}
+                >
+                  Yes, reset to sample data
+                </button>
+                <button type="button" className="btn btn-small" onClick={() => setConfirmReset(false)}>
+                  Cancel
+                </button>
+              </div>
+            </>
+          ) : (
+            <button type="button" className="link-button" onClick={() => setConfirmReset(true)}>
+              Reset to sample data
+            </button>
+          )}
         </div>
         {checkedCount > 0 && (
           <p className="muted small">
