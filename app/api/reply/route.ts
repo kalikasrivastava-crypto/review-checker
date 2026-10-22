@@ -1,6 +1,6 @@
 import { aiErrorMessage, AiError, askAI } from "@/lib/ai";
 import { replySystem, replyUser } from "@/lib/prompts";
-import { userClient } from "@/lib/supabase-server";
+import { signedInClient } from "@/lib/supabase-server";
 import { validateReviewInput } from "@/lib/validate";
 import type { Check, ReplyApproach, ReplyLanguage, ReplyResponse, ReplyStyle, Review } from "@/lib/types";
 
@@ -39,8 +39,8 @@ function ruleWarning(text: string, review: Review, style: ReplyStyle): string | 
 }
 
 export async function POST(request: Request) {
-  const sb = userClient(request);
-  if (!sb || (await sb.auth.getUser()).error) return reply({ ok: false, error: "Please log in again.", code: "bad_input" }, 401);
+  const sb = await signedInClient(request);
+  if (!sb) return reply({ ok: false, error: "Please log in again.", code: "bad_input" }, 401);
   let body: Record<string, unknown> = {};
   try {
     body = await request.json();

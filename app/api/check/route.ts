@@ -4,7 +4,7 @@ import { mostSimilar } from "@/lib/similarity";
 import { SCORE_SYSTEM, scoreUser } from "@/lib/prompts";
 import { hashString } from "@/lib/sig";
 import { checkSignature } from "@/lib/settings";
-import { loadRecords, userClient, type RestaurantRow } from "@/lib/supabase-server";
+import { loadRecords, signedInClient, type RestaurantRow } from "@/lib/supabase-server";
 import { normalizeClaims, parseAiReading, validateReviewInput } from "@/lib/validate";
 import type { AiReading, CheckResponse } from "@/lib/types";
 
@@ -20,7 +20,7 @@ function reply(body: CheckResponse, status = 200) {
  * data is visible). The AI reads only the review text, and only once: the claims it finds are saved with the review.
  */
 export async function POST(request: Request) {
-  const sb = userClient(request);
+  const sb = await signedInClient(request);
   if (!sb) return reply({ ok: false, error: "Please log in again.", code: "bad_input" }, 401);
   let reviewId = "";
   try {

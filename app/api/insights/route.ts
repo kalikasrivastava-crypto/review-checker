@@ -1,9 +1,9 @@
 import { buildInsights } from "@/lib/insights";
-import { loadRecords, userClient, type RestaurantRow } from "@/lib/supabase-server";
+import { loadRecords, signedInClient, type RestaurantRow } from "@/lib/supabase-server";
 
 /** Dashboard numbers, footfall, themes and look-alike reviews for the signed-in owner's restaurant (no AI). */
 export async function POST(request: Request) {
-  const sb = userClient(request);
+  const sb = await signedInClient(request);
   if (!sb) return Response.json({ ok: false, error: "Please log in again." }, { status: 401 });
   const { data: restaurant } = await sb.from("restaurants").select("id,settings,records_version").limit(1).maybeSingle();
   if (!restaurant) return Response.json({ ok: false, error: "No restaurant yet." }, { status: 404 });

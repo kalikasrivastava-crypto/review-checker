@@ -48,6 +48,27 @@ export default function UploadView({ source, parsed, error, busy, onFile, onSamp
   const withDate = s ? s.used - s.dateMissing - s.dateUnreadable : 0;
   const skipped = s ? s.skippedEmpty + s.skippedShort + s.duplicates : 0;
 
+  const picker = source ? (
+    <details className="details" style={{ marginTop: 16 }} open={textMissing}>
+      <summary>Match columns</summary>
+      <div className="details-body form-grid">
+        {FIELDS.map(({ field, label }) => (
+          <label key={field}>
+            {label}
+            <select value={source.columns[field] ?? ""} onChange={(e) => onColumn(field, e.target.value === "" ? null : Number(e.target.value))}>
+              <option value="">— none —</option>
+              {source.headers.map((h, i) => (
+                <option key={i} value={i}>
+                  {h || `Column ${i + 1}`}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
+      </div>
+    </details>
+  ) : null;
+
   return (
     <div className="stack-16">
       <header className="page-head">
@@ -133,6 +154,30 @@ export default function UploadView({ source, parsed, error, busy, onFile, onSamp
         </div>
       </section>
 
+      {source && !s && (
+        <section className="card card--pad" aria-labelledby="pick-title">
+          <div className="card__head">
+            <h2 id="pick-title">Check your file</h2>
+            <span className="badge badge--accent">Your file</span>
+          </div>
+          <div className="file-line">
+            <IconFile />
+            <strong>{source.name}</strong>
+            <span className="muted">{source.size !== null && fileSize(source.size)}</span>
+          </div>
+          <div className="alert alert--warning">
+            <IconAlert />
+            <p>We couldn&apos;t tell which column holds the review text. Pick it under &ldquo;Match columns&rdquo; below to continue.</p>
+          </div>
+          {picker}
+          <div className="actions-row">
+            <button type="button" className="button button--secondary" onClick={onClear}>
+              Start over
+            </button>
+          </div>
+        </section>
+      )}
+
       {source && s && (
         <section className="card card--pad" aria-labelledby="check-title">
           <div className="card__head">
@@ -207,24 +252,7 @@ export default function UploadView({ source, parsed, error, busy, onFile, onSamp
             </div>
           )}
 
-          <details className="details" style={{ marginTop: 16 }} open={textMissing}>
-            <summary>Match columns</summary>
-            <div className="details-body form-grid">
-              {FIELDS.map(({ field, label }) => (
-                <label key={field}>
-                  {label}
-                  <select value={source.columns[field] ?? ""} onChange={(e) => onColumn(field, e.target.value === "" ? null : Number(e.target.value))}>
-                    <option value="">— none —</option>
-                    {source.headers.map((h, i) => (
-                      <option key={i} value={i}>
-                        {h || `Column ${i + 1}`}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ))}
-            </div>
-          </details>
+          {picker}
 
           {parsed && parsed.reviews.length > 0 && (
             <>

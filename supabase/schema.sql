@@ -261,3 +261,7 @@ grant execute on function public.submit_feedback(text, int, text, text, int, tex
 grant execute on function public.create_restaurant(jsonb, text) to authenticated;
 grant execute on function public.seed_demo_restaurant() to authenticated;
 grant execute on function public.reset_demo() to authenticated;
+
+-- Second layer of protection: guests (the anonymous role) never touch tables directly.
+revoke all on all tables in schema public from anon;
+revoke all on all sequences in schema public from anon;

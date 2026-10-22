@@ -15,6 +15,14 @@ export function userClient(request: Request): SupabaseClient | null {
   });
 }
 
+/** Like userClient, but only when the login token is real and still valid; otherwise null (answer 401). */
+export async function signedInClient(request: Request): Promise<SupabaseClient | null> {
+  const sb = userClient(request);
+  if (!sb) return null;
+  const { data, error } = await sb.auth.getUser();
+  return error || !data.user ? null : sb;
+}
+
 /** The all-powerful client. Server only, and only for jobs a signed-in owner can't do (like making a demo account). */
 export function adminClient(): SupabaseClient | null {
   const key = process.env.SUPABASE_SECRET_KEY?.trim();
