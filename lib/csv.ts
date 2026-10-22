@@ -1,5 +1,5 @@
 /** Small CSV parser: handles quoted fields, commas and quotes inside them. Returns rows of cells. */
-export function parseCsv(text: string): string[][] {
+export function parseCsv(text: string, delimiter = ","): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = "";
@@ -18,7 +18,7 @@ export function parseCsv(text: string): string[][] {
       }
     } else if (ch === '"') {
       quoted = true;
-    } else if (ch === ",") {
+    } else if (ch === delimiter) {
       row.push(cell);
       cell = "";
     } else if (ch === "\n" || ch === "\r") {
@@ -34,4 +34,16 @@ export function parseCsv(text: string): string[][] {
   row.push(cell);
   if (row.some((c) => c.trim() !== "")) rows.push(row);
   return rows;
+}
+
+/** Guesses the separator from the first line: comma, semicolon or tab (spreadsheets in some regions save with semicolons). */
+export function detectDelimiter(text: string): string {
+  const first = text.replace(/^\uFEFF/, "").split(/\r?\n/, 1)[0] ?? "";
+  const counts: [string, number][] = [
+    [",", first.split(",").length],
+    [";", first.split(";").length],
+    ["\t", first.split("\t").length],
+  ];
+  counts.sort((a, b) => b[1] - a[1]);
+  return counts[0][1] > 1 ? counts[0][0] : ",";
 }
