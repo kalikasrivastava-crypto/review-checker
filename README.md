@@ -4,9 +4,7 @@ Check a suspicious negative Google review against your own order records and ope
 
 ## Job to be done
 
-> When a suspicious negative Google review appears on my restaurant's listing, I want to see quickly whether its claims match my own records and have a calm reply ready, so I can respond within 24–48 hours without losing an evening to investigating.
-
-**User:** the owner-operator of a single-location independent restaurant who answers Google reviews personally, often mid-shift.
+> When I receive a suspicious negative Google review, I want to understand whether it may be fake and how to respond, so I can protect my restaurant's reputation without spending hours investigating it.
 
 ## The 3 tests
 
@@ -23,64 +21,68 @@ Small known flaws: a claim can occasionally be listed twice (for example "appeti
 
 ## Current workflow → future workflow
 
-| | Today (without the app) | With the app |
-|---|---|---|
-| Notice | A negative review shows up, often during service. | Same. |
-| Investigate | Dig through the till and booking records for that day, by hand, for an evening. | Click the review, click **Check review**: each claim is compared to orders and hours automatically. |
-| Decide | Gut feeling about whether it's genuine. | A risk level with reasons, and every claim marked match, mismatch or no data. |
-| Reply | Write from scratch, tired and annoyed, sometimes too defensive. | A calm draft is ready to edit. |
-| Post | Paste into Google. | Approve, Copy, paste into Google (still done by hand). |
+**Current workflow**
+1. Notice a suspicious negative review on Google.
+2. Compare the review with what happened at the restaurant.
+3. Check available evidence, such as order records, opening hours, and CCTV if necessary.
+4. Write a public response.
+5. Report the review to Google if it appears to violate its policies.
+6. Follow up, or give up if the review remains online.
 
-**Later versions (out of scope now):** posting replies through the Google Business Profile API, pulling new reviews on a schedule (n8n could come back for this), WhatsApp or email alerts, drafting Google reports and the 5-day re-check, multiple locations, login and billing.
+**Future workflow**
+1. New reviews are collected automatically or loaded from a sample CSV.
+2. DineTrust analyses each review and assigns a low, medium, or high suspicion score.
+3. It extracts factual claims and checks them against sample POS data and opening hours.
+4. The owner sees the review, score, reasons, and evidence on one screen.
+5. DineTrust drafts a calm public reply.
+6. The owner approves or edits the reply. No reply is automatically posted in the MVP.
 
-## Architecture: Input → AI → Logic → Action → Output
+## Architecture
 
-| Stage | What happens | AI or code |
-|---|---|---|
-| **Input** | Pick one of 8 seeded reviews (`data/reviews.json`) or paste text plus date and star rating. | Code: `app/page.tsx`, `components/ReviewList.tsx` |
-| Input check | Empty, too short, or missing rating/date is rejected with a message. The AI is not called. | Code: `lib/validate.ts` |
-| **AI call 1** | Reads the review and returns whether it is a review, a risk level, up to 3 reasons, and each checkable claim (party size, weekday, time). | **AI:** `app/api/check/route.ts` |
-| **Logic** | Looks up each claim in `data/orders.csv` and `data/hours.json`, counts bursts of one-star reviews (3+ in 24 hours), and settles the final risk. Evidence can only raise the AI's risk, never lower it, and "no data" changes nothing. | Code: `lib/checks.ts` |
-| **AI call 2** | Drafts a public reply under 80 words from the review plus the evidence. | **AI:** `app/api/reply/route.ts` |
-| **Action** | The owner edits the draft and clicks **Approve**. | **Human** |
-| **Output** | Score card, evidence table, editable reply. After Approve: "Approved – ready to paste into Google" and a Copy button. Nothing is posted to Google. | Code: `components/` |
+**Input:** Google review text, star rating, review date, sample restaurant order/POS data, and restaurant opening hours. For the demo, reviews are provided through a seeded file rather than a live Google connection.
 
-Prompts live in `lib/prompts.ts`. The Gemini call is in `lib/ai.ts`. Shared types are in `lib/types.ts`.
+**AI:** analyses the review, identifies suspicious signals, extracts factual claims, explains its risk assessment, and drafts a calm, policy-safe reply. It returns structured JSON for the application to process.
 
-## Where AI is used, and what stays human
+**Logic:**
+1. Apply a rule to flag a burst of three or more one-star reviews within 24 hours.
+2. Compare extracted claims against sample order records and opening hours.
+3. Label evidence as match, mismatch, or no data.
+4. Treat the score as a suspicion signal, not proof that a review is fake.
+5. Keep all public actions subject to owner approval.
 
-**AI is used twice, and only where a fixed rule can't do the job:**
-- **Reading the review.** People describe the same fact in endless ways ("table of 10", "ten of us", "our big group on Friday night"). A keyword rule would miss most of them. The AI turns the text into structured claims; plain code then does the exact lookup.
-- **Writing the reply.** The reply has to address this review's specific points without sounding defensive. A template can't do that.
+**Action:** the workflow sends review text to the AI, applies the rules, checks available restaurant data, and passes the results to the web app.
 
-**Everything else is plain code on purpose:** input checks, record lookups, the burst rule, the final risk rule and the whole screen. These are exact yes/no logic, so they behave the same way every time, they cost nothing, and the owner can read and trust them.
+**Output:** one decision screen showing the original review, suspicion score, reasons, evidence checks, and a suggested reply with Approve and Edit options.
 
-**What stays human:** choosing the review, editing the reply, approving it, copying it and posting it on Google. The risk level is a hint, not a verdict.
+**What stays human:** the restaurant owner makes the final decision about whether a review is suspicious, whether to report it, and whether to publish the reply. DineTrust does not automatically accuse reviewers or take public action.
 
-## Why these tools
+**Why these tools:**
+1. **AI model:** understands review text, extracts claims, explains suspicious signals, and drafts replies.
+2. **n8n:** connects the steps and automates workflow logic.
+3. **GitHub:** stores code, versions prompts, and tracks test cases.
+4. **Vercel:** hosts the decision screen and application.
+5. **Sample CSV:** enables a working demo without waiting for Google API access.
 
-- **Next.js (one app):** the screen and the server routes live together, so there is one thing to build and run. The API key stays on the server, in `app/api/`, and never reaches the browser.
-- **Plain TypeScript functions instead of n8n:** the two jobs n8n would do (claim checks and the burst rule) are a few small functions. n8n can return later for scheduled pulls from Google.
-- **Seeded files instead of a database:** 8 reviews, a week of made-up orders and the opening hours are enough for the 3 tests and easy to read.
-- **Gemini (`gemini-3.6-flash` by default):** the project owner uses a Gemini key. The call is one small function in `lib/ai.ts`, so swapping providers means changing only that file. Set `GEMINI_MODEL` in `.env.local` to try another model.
-- **No UI library:** one plain CSS file.
+**Failure cases:**
+1. **A genuine complaint is flagged:** the owner checks the evidence. A suspicion score alone is not grounds to report it.
+2. **A fake review is missed:** the owner can still review suspicious cases manually; more reviewer-history signals can be added later.
+3. **The reply contains invented facts or private information:** the owner must review and edit the draft before using it. Unsupported claims and sensitive details must be removed.
 
-## Failure cases (the screen shows a message, never a crash)
+### As built in this MVP
 
-| Situation | What the screen says |
+The text above is the target design. This repository implements a simplified version of it:
+
+| Target design | What is built here |
 |---|---|
-| Empty text | "Paste a review first." |
-| Too short | "That's too short to check." |
-| Missing or invalid rating or date | "Add the review's star rating (1 to 5)." / "Add the date the review was posted." |
-| Text isn't a review (recipe, random text) | "This doesn't look like a review." No score. |
-| API key missing, placeholder or rejected | "The AI service isn't set up." (the key's name is never shown) |
-| AI rate-limited or overloaded | "The AI is busy right now. Wait a minute and try again." (one automatic retry first) |
-| AI times out (9 seconds) | "The AI took too long to answer. Try again." |
-| AI answer isn't valid JSON | One automatic retry, then "Couldn't read the AI's answer. Try again." |
-| Reply can't be drafted | The score and evidence stay; the reply box shows "Couldn't draft a reply" with a Try again button. |
-| A claim with nothing to check against (e.g. a day with no orders on file) | Shown as "no data", never "mismatch", and the risk is unchanged. |
+| Claude analyses reviews | Gemini (`gemini-3.6-flash` by default; set `GEMINI_MODEL` to change). One small file, `lib/ai.ts`, makes the call. |
+| n8n runs the workflow | No n8n. The claim checks, burst rule and final-risk rule are plain TypeScript functions in `lib/checks.ts`. n8n can return for scheduled pulls from Google. |
+| Hosted on Vercel | Runs locally with `npm run dev`; not deployed. |
+| Reviews from a seeded CSV | 8 seeded reviews in `data/reviews.json`, plus a paste box. No CSV import. |
+| Approve and Edit | The reply box is editable; Approve shows "Approved – ready to paste into Google" and a Copy button. Nothing is posted. |
+| Policy-safe reply | Plain code flags drafts that are too long or mention records, refunds or accusations. |
+| Failure handling | Empty, too-short or non-review text, a missing or rejected key, a busy or slow AI, and unreadable AI output each show a plain message. No crash. |
 
-**What the AI could get wrong, and how the screen shows it:** the evidence table quotes the review's own words next to each claim, so a misread or missed claim is visible. When records or a burst raise the risk, the card says "The AI rated this X; your records and recent reviews raised it to Y". The reply is checked by code for length and for words like refund, records or lying, and a warning is shown instead of hiding a bad draft. A banner reads "AI-assisted – check before posting."
+**Flow in the code:** Input (`app/page.tsx`, `lib/validate.ts`) → AI call 1 (`app/api/check`) → Logic (`lib/checks.ts`) → AI call 2 (`app/api/reply`) → Action (owner edits and approves) → Output (`components/`). Prompts live in `lib/prompts.ts`.
 
 ## Known limits
 
