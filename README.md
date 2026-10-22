@@ -22,7 +22,7 @@ The app is built for Gemini's free plan, which allows only a few AI calls a minu
 - AI calls are queued one at a time, at least 12 seconds apart, with a visible countdown.
 - If the AI says it is busy, the queue waits a minute and tries again (twice at most).
 - Every check and every reply draft is saved, so the same review is never checked twice. A result is marked out of date, not re-run, when you change your restaurant details.
-- If the main model's free quota runs out, the app tries a second model.
+- If a model's free quota runs out, the app tries the next one.
 
 ## Job to be done
 
@@ -87,7 +87,7 @@ The app is built for Gemini's free plan, which allows only a few AI calls a minu
 
 | Target design | What is built here |
 |---|---|
-| Claude analyses reviews | Gemini (`gemini-3.6-flash` by default, with `gemini-3.8-flash` as a fallback). One small file, `lib/ai.ts`, makes the call, so switching provider means changing only that file. |
+| Claude analyses reviews | Gemini (`gemini-3.6-flash` by default, with fallbacks when its free quota runs out). One small file, `lib/ai.ts`, makes the call, so switching provider means changing only that file. |
 | n8n runs the workflow | No n8n. The claim checks, burst rule, similarity check and scoring are plain TypeScript in `lib/`. n8n can return for scheduled pulls from Google. |
 | Reviews from a CSV or Google | 23 seeded demo reviews plus a form to add your own. No CSV import of reviews and no Google connection. |
 | Approve and Edit | Replies are editable, copyable and can be marked as replied. Nothing is posted to Google or WhatsApp for you. |
@@ -116,7 +116,7 @@ npm install
 cp .env.example .env.local
 ```
 
-Open `.env.local` and paste your key after `GEMINI_API_KEY=` (no spaces or quotes). Optional settings: `GEMINI_MODEL` (default `gemini-3.6-flash`) and `GEMINI_FALLBACK_MODEL` (default `gemini-3.8-flash`, used when the main model's free quota is used up). Then:
+Open `.env.local` and paste your key after `GEMINI_API_KEY=` (no spaces or quotes). Optional settings: `GEMINI_MODEL` (default `gemini-3.6-flash`) and `GEMINI_FALLBACK_MODELS` (comma-separated, default `gemini-3.8-flash,gemini-3.5-flash-lite`, tried in order when a model's free quota is used up). Then:
 
 ```bash
 npm run dev

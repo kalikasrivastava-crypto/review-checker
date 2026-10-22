@@ -1,8 +1,11 @@
 // One small helper that calls the Gemini API. The key is read on the server from .env.local.
 // gemini-3.6-flash answered in about 2-6 s in testing. Set GEMINI_MODEL in .env.local to try another.
 const MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-3.6-flash";
-// If the main model's free quota is used up (HTTP 429), try this one before giving up.
-const FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL?.trim() || "gemini-3.8-flash";
+// If a model's free quota is used up (HTTP 429), try the next one before giving up.
+const FALLBACK_MODELS = (process.env.GEMINI_FALLBACK_MODELS?.trim() || "gemini-3.8-flash,gemini-3.5-flash-lite")
+  .split(",")
+  .map((m) => m.trim())
+  .filter((m) => m && m !== MODEL);
 const TIMEOUT_MS = 9000;
 const FALLBACK_TIMEOUT_MS = 25000; // the fallback model is slower, and it only runs when the main one is out of quota
 
@@ -56,9 +59,10 @@ export async function askAI(system: string, user: string, json = false): Promise
   let res: Response;
   try {
     res = await send(apiKey, MODEL, system, user, json, signal);
-    if (res.status === 429 && FALLBACK_MODEL && FALLBACK_MODEL !== MODEL) {
+    for (const fallback of FALLBACK_MODELS) {
+      if (res.status !== 429) break;
       signal = AbortSignal.timeout(FALLBACK_TIMEOUT_MS);
-      res = await send(apiKey, FALLBACK_MODEL, system, user, json, signal);
+      res = await send(apiKey, fallback, system, user, json, signal);
     }
     // Gemini sometimes answers "high demand" (503). One quick retry usually gets through.
     if (res.status === 503) {
