@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import ActionPlanView from "./dashboard/ActionPlanView";
 import AppShell, { type View } from "./dashboard/AppShell";
 import OverviewView, { type ActivityItem } from "./dashboard/OverviewView";
@@ -27,7 +28,7 @@ export default function AnalyseApp() {
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [ticks, setTicks] = useState<Record<string, boolean>>({});
   const activityId = useRef(0);
-  const autoSample = useRef(false);
+  const pathname = usePathname();
 
   const parsed = useMemo(() => (source && source.columns.text !== undefined ? buildReviews(source.rows, source.columns) : null), [source]);
   const analysis = useMemo(() => (parsed && parsed.reviews.length > 0 ? analyseReviews(parsed.reviews) : null), [parsed]);
@@ -127,14 +128,15 @@ export default function AnalyseApp() {
     log(message);
   }
 
-  // The home page links here with #sample to open the sample data straight away.
+  // The home page links here with #sample to open the sample data straight away. This page stays mounted
+  // when you visit the home page and come back, so watch the path too, and clear the hash once handled.
   useEffect(() => {
-    if (window.location.hash === "#sample" && !autoSample.current) {
-      autoSample.current = true;
+    if (pathname === "/analyse" && window.location.hash === "#sample") {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
       void Promise.resolve().then(() => onSample("full"));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [pathname]);
 
   // Each new screen starts at the top.
   useEffect(() => {
