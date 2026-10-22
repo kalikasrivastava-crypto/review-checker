@@ -6,6 +6,8 @@ export type ClaimType =
   | "item_ordered"
   | "reservation"
   | "bill"
+  | "staff" // how staff behaved
+  | "food_quality" // food was cold, bland and so on
   | "other";
 export type Status = "match" | "mismatch" | "no_record";
 
@@ -36,12 +38,9 @@ export interface Claim {
   item: string | null; // dish named in an item_ordered claim
 }
 
-/** What the AI returns. It never sees the restaurant's records. */
+/** What the AI returns: only the claims it found. It never sees the records and never judges the review. */
 export interface AiReading {
   is_review: boolean;
-  verdict: "Plausible" | "Suspicious" | "Unverifiable";
-  confidence: number; // 0-100
-  summary: string;
   claims: Claim[];
 }
 
@@ -54,16 +53,27 @@ export type CheckKind =
   | "no_reservation"
   | "no_dish"
   | "no_free_tables"
+  | "no_data" // no bills or reservations on file for that day, so nothing to compare with
+  | "subjective" // wait time, staff, food quality and other opinions: records can't confirm these
+  | "vague" // not enough detail (no day, time, party size or dish) to check
   | "order_found"
   | "reservation_found"
   | "dish_found"
   | "hours_ok";
 
+/** Where a piece of evidence comes from. */
+export type EvidenceSource = "POS bills" | "Reservations" | "Opening hours" | "Restaurant settings" | "Footfall";
+
 export interface Check {
+  /** Which claim this is evidence for. One claim can have several checks. */
+  cid?: string;
   claim: string;
   record: string;
   status: Status;
   kind?: CheckKind;
+  source?: EvidenceSource;
+  /** What sort of claim this is (staff, wait time, party size...). */
+  ctype?: ClaimType;
 }
 
 /** One line of the score breakdown. Positive points add suspicion, negative points add trust. */
@@ -81,10 +91,15 @@ export type FactorIcon =
   | "detail"
   | "trust";
 
+export type FactorGroup = "mismatch" | "missing" | "signal" | "trust";
+
 export interface Factor {
   label: string;
   points: number;
   icon?: FactorIcon;
+  group?: FactorGroup;
+  /** The claim this came from (matches `cid` on its checks). */
+  checkId?: string;
 }
 
 /** How busy the restaurant was on the day the review says it visited. */
@@ -106,7 +121,7 @@ export interface CheckResult {
   visit?: Visit | null;
   checks: Check[];
   burst: boolean;
-  aiVerdict: AiReading["verdict"];
+  aiVerdict?: string; // older saved results only
 }
 
 export type CheckResponse =

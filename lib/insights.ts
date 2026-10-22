@@ -108,7 +108,7 @@ export function screenReview(r: Review, records: Records, all: Review[], similar
   const reasons: string[] = [];
   const checks = buildChecks(roughClaims(r.text), new Date(r.date), records);
   const mismatch = checks.find((c) => c.status === "mismatch");
-  const strongMatch = checks.some((c) => c.status === "match" && !/opening hours/.test(c.record));
+  const strongMatch = checks.some((c) => c.status === "match" && c.kind !== "hours_ok");
   if (mismatch) reasons.push(`A claim doesn't fit your records: ${mismatch.record}`);
   if (isBurst(r, all) && !strongMatch) {
     reasons.push("One of several one-star reviews in 24 hours, and nothing in it could be confirmed.");

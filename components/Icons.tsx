@@ -1,7 +1,10 @@
-import type { EvidenceIcon } from "@/lib/risk";
 import type { FactorIcon } from "@/lib/types";
 
-export type IconName = FactorIcon | EvidenceIcon | "check" | "cross" | "question" | "flag" | "pdf" | "reply" | "whatsapp";
+export type IconName =
+  | FactorIcon
+  | "busy"
+  | "info"
+  | "check" | "cross" | "question" | "flag" | "pdf" | "reply" | "whatsapp";
 
 const PATHS: Record<IconName, React.ReactNode> = {
   capacity: (

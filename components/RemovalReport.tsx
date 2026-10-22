@@ -21,7 +21,7 @@ export default function RemovalReport({
       <h2>Report to Google</h2>
       <p className="muted">
         This review looks suspicious. Paste this summary into Google&apos;s &ldquo;Report review&rdquo; form. It is
-        built from your records, not proof the review is fake, so edit it and check it before you send it.
+        built from your records. It only lists where the review conflicts with them, which is not proof of anything, so edit it and check it before you send it.
       </p>
       <label className="sr-only" htmlFor="removal-report">
         Removal report

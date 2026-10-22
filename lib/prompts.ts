@@ -1,17 +1,14 @@
 import type { Check, ReplyApproach, ReplyLanguage, ReplyStyle, Review } from "./types";
 
-export const SCORE_SYSTEM = `You help a restaurant owner decide whether a negative Google review looks genuine.
-You see only the review text. You do NOT see the restaurant's records, so never claim a fact is confirmed.
+export const SCORE_SYSTEM = `You help a restaurant owner by pulling the claims out of a Google review.
+You do NOT judge whether the review is true or fair. You never see the restaurant's records, and you never compare anything with them. Your only job is to list what the reviewer claims.
 Return only JSON, with no other text, in exactly this shape:
 {
   "is_review": true or false,
-  "verdict": "Plausible" | "Suspicious" | "Unverifiable",
-  "confidence": number from 0 to 100,
-  "summary": "one plain sentence",
   "claims": [
     {
-      "text": "the claim in the reviewer's own words",
-      "type": "party_size" | "date_time" | "wait_time" | "item_ordered" | "reservation" | "bill" | "other",
+      "text": "the claim, copied exactly from the review so it can be found in it",
+      "type": "party_size" | "date_time" | "reservation" | "bill" | "item_ordered" | "wait_time" | "staff" | "food_quality" | "other",
       "party_size": number or null,
       "weekday": "monday".."sunday" or null,
       "date": "YYYY-MM-DD" or null,
@@ -21,15 +18,13 @@ Return only JSON, with no other text, in exactly this shape:
   ]
 }
 Rules:
-- is_review is false if the text is not a customer review of a restaurant visit (a recipe, random text, an ad). Then use verdict "Unverifiable", confidence 0, an empty summary and no claims.
-- verdict: "Suspicious" if the text itself looks fake or exaggerated (vague, extreme language, accusations with no details, details that don't fit a restaurant). "Plausible" if it is specific and balanced. "Unverifiable" if there is too little to judge.
-- confidence is how sure you are of that verdict.
-- List every factual claim that could be checked against records: party size, day or time of the visit, a reservation, a bill or payment, wait time, items ordered. Label each with its type.
-- Opinions such as "the food was bland" are not claims.
-- List each distinct fact once. Do not repeat a fact as a second claim.
-- Fill in weekday, time and party_size only on the claim they belong to: a party_size claim carries party_size, a date_time claim carries weekday and time. A wait_time or other claim never carries party_size, weekday or time. Leave "date" null unless the review states an exact date. For item_ordered claims put the dish in "item".
-- Use date_time for when the visit happened and party_size for how many people; do not merge them into one claim.
-- Reasons stay short and plain, with no jargon.`;
+- is_review is false if the text is not a customer review of a restaurant visit (a recipe, random text, an ad). Then return an empty claims list.
+- Split the review into separate claims and list every one, including opinions: "staff was rude" is a staff claim, "food was cold" is a food_quality claim, "waited 45 minutes" is a wait_time claim.
+- Copy each claim's words exactly as written in the review. Do not rephrase.
+- If the reviewer states how many people and when together ("table of 10 on Friday around 8 PM"), make ONE party_size claim with party_size, weekday and time all filled in.
+- date_time is for when the visit happened, when it is stated without a party size. reservation is for a booking they say they made. bill is only for something they say they paid or were charged, never for an opinion about prices. item_ordered is for a dish, with the dish in "item".
+- Leave "date" null unless the review gives an exact date. Use null for anything the review doesn't say.
+- List each distinct fact once.`;
 
 export function scoreUser(review: Review): string {
   return `Star rating: ${review.rating}

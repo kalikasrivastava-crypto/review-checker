@@ -24,7 +24,7 @@ export default function About() {
           <h2>The problem</h2>
           <p>
             One unfair review can cost you real customers, and checking each one by hand can take an evening. Some bad
-            reviews are fake, copied from somewhere else, or about a visit that never happened. Others are fair, and
+            reviews describe a visit that never happened, a table you don&apos;t have, or an hour you were closed. Others are fair, and
             deserve a kind and quick answer. It is hard to tell which is which in the middle of a shift.
           </p>
         </section>
@@ -46,7 +46,7 @@ export default function About() {
             </li>
             <li>
               <strong>You decide what to do.</strong> It drafts a calm reply in English, Hindi or Hinglish, writes a
-              PDF report you can attach to a Google report if the review looks fake, and prepares a WhatsApp note for
+              PDF report you can attach to a Google report if the review conflicts with your records, and prepares a WhatsApp note for
               your manager if the complaint is fair. Nothing is posted or sent for you.
             </li>
           </ol>

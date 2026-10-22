@@ -1,7 +1,6 @@
 import type { AiReading, Claim, ClaimType, Review } from "./types";
 
 export const MIN_REVIEW_CHARS = 20;
-const VERDICTS = ["Plausible", "Suspicious", "Unverifiable"] as const;
 const CLAIM_TYPES: ClaimType[] = [
   "party_size",
   "date_time",
@@ -9,6 +8,8 @@ const CLAIM_TYPES: ClaimType[] = [
   "item_ordered",
   "reservation",
   "bill",
+  "staff",
+  "food_quality",
   "other",
 ];
 
@@ -48,19 +49,15 @@ export function parseAiReading(raw: string): AiReading | null {
     return null;
   }
   if (typeof data.is_review !== "boolean") return null;
-  // The AI never sees the records, so it can't confirm anything: treat "Verified" as "Plausible".
-  const verdictRaw = data.verdict === "Verified" ? "Plausible" : data.verdict;
-  if (!VERDICTS.includes(verdictRaw as (typeof VERDICTS)[number])) return null;
-  const confidence = Number(data.confidence);
-  if (!Number.isFinite(confidence)) return null;
   if (!Array.isArray(data.claims)) return null;
 
   const claims: Claim[] = [];
   for (const c of data.claims as Record<string, unknown>[]) {
-    if (!c || typeof c.text !== "string" || !CLAIM_TYPES.includes(c.type as ClaimType)) return null;
+    if (!c || typeof c.text !== "string" || !c.text.trim()) continue;
     claims.push({
-      text: c.text,
-      type: c.type as ClaimType,
+      text: c.text.trim(),
+      // An unfamiliar label from the AI is treated as a general claim rather than failing the whole check.
+      type: CLAIM_TYPES.includes(c.type as ClaimType) ? (c.type as ClaimType) : "other",
       party_size: typeof c.party_size === "number" ? c.party_size : null,
       weekday: str(c.weekday)?.toLowerCase() ?? null,
       date: str(c.date),
@@ -68,13 +65,7 @@ export function parseAiReading(raw: string): AiReading | null {
       item: str(c.item),
     });
   }
-  return {
-    is_review: data.is_review,
-    verdict: verdictRaw as AiReading["verdict"],
-    confidence: Math.max(0, Math.min(100, confidence)),
-    summary: typeof data.summary === "string" ? data.summary.trim() : "",
-    claims,
-  };
+  return { is_review: data.is_review, claims };
 }
 
 export const MAX_OTHER_REVIEWS = 400;

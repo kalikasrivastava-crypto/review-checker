@@ -1,163 +1,225 @@
-import type { Check, CheckKind, CheckResult, Factor, FactorIcon } from "./types";
+import type { Check, CheckKind, CheckResult, ClaimType, EvidenceSource, Factor, FactorGroup, FactorIcon } from "./types";
 
 export type Risk = "low" | "medium" | "high";
 
 export const RISK_LABEL: Record<Risk, string> = { low: "Low risk", medium: "Medium risk", high: "High risk" };
 
-const IMPOSSIBLE: CheckKind[] = ["impossible_capacity", "impossible_closed", "impossible_hours"];
-const MISSING_KINDS: CheckKind[] = ["no_bill", "no_reservation", "no_dish"];
+const HIGH_LINE = 40;
+const MEDIUM_LINE = 15;
+
+/** A confirmed mismatch: the records directly conflict with what the review says. */
+const isConflict = (c: Check) => c.status === "mismatch";
 
 /**
- * The headline: high if the score is 40 or more; medium if some signals add up (15+) or there is
- * nothing in the review we could check; low otherwise. Older saved results fall back to their verdict.
+ * The headline. High needs a confirmed conflict with the records and a score of 40 or more, so a review
+ * with no conflicts can never be High, whatever else it says. Medium is a score of 15 to 39. Opinions and
+ * missing data alone never raise the level. Older saved results fall back to their verdict.
  */
 export function riskLevel(result: CheckResult): Risk {
+  const conflicts = result.checks.some(isConflict);
   if (typeof result.score !== "number") {
-    return result.verdict === "Suspicious" ? "high" : result.verdict === "Unverifiable" ? "medium" : "low";
+    if (result.verdict === "Suspicious" && conflicts) return "high";
+    return result.verdict === "Suspicious" || result.verdict === "Unverifiable" ? "medium" : "low";
   }
-  if (result.score >= 40) return "high";
-  const matches = result.checks.filter((c) => c.status === "match").length;
-  if (result.score >= 15 || (result.verdict === "Unverifiable" && matches === 0)) return "medium";
-  return "low";
+  if (result.score >= HIGH_LINE && conflicts) return "high";
+  // A review we simply can't check (an opinion, or a day with no records) is not a reason for suspicion.
+  return result.score >= MEDIUM_LINE ? "medium" : "low";
 }
+
+// ---------------------------------------------------------------------------------------------
+// Claim rows: one row per claim in the review, with the evidence for it from each source.
+// ---------------------------------------------------------------------------------------------
+
+export type RowStatus = "mismatch" | "match" | "unverified";
+
+export interface ClaimLine {
+  source: EvidenceSource | null;
+  text: string;
+  status: Check["status"];
+  kind?: CheckKind;
+}
+
+export interface ClaimRow {
+  id: string;
+  claim: string;
+  status: RowStatus;
+  lines: ClaimLine[];
+  type?: ClaimType;
+  /** For ordering: the most serious conflict in the row. */
+  weight: number;
+}
+
+const SOURCE_BY_KIND: Partial<Record<CheckKind, EvidenceSource>> = {
+  impossible_capacity: "Restaurant settings",
+  impossible_closed: "Opening hours",
+  impossible_hours: "Opening hours",
+  hours_ok: "Opening hours",
+  order_found: "POS bills",
+  no_bill: "POS bills",
+  dish_found: "POS bills",
+  no_dish: "POS bills",
+  reservation_found: "Reservations",
+  no_reservation: "Reservations",
+  no_free_tables: "Footfall",
+};
+
+const WEIGHT: Partial<Record<CheckKind, number>> = {
+  impossible_capacity: 40,
+  impossible_closed: 40,
+  impossible_hours: 40,
+  no_bill: 25,
+  no_reservation: 25,
+  no_free_tables: 20,
+  no_dish: 15,
+};
+
+export function claimRows(result: CheckResult): ClaimRow[] {
+  const byId = new Map<string, ClaimRow>();
+  result.checks.forEach((c) => {
+    const id = c.cid ?? `t:${c.claim}`; // older results have no claim ids: group by the claim's words
+    let row = byId.get(id);
+    if (!row) {
+      row = { id, claim: c.claim, status: "unverified", lines: [], weight: 0, type: c.ctype };
+      byId.set(id, row);
+    }
+    row.lines.push({ source: c.source ?? (c.kind ? (SOURCE_BY_KIND[c.kind] ?? null) : null), text: c.record, status: c.status, kind: c.kind });
+    if (isConflict(c)) row.weight = Math.max(row.weight, (c.kind && WEIGHT[c.kind]) || 10);
+  });
+  const rows = [...byId.values()];
+  for (const row of rows) {
+    row.status = row.lines.some((l) => l.status === "mismatch") ? "mismatch" : row.lines.some((l) => l.status === "match") ? "match" : "unverified";
+    // Conflicts first within a row, then matches, then what can't be verified.
+    const order = { mismatch: 0, match: 1, no_record: 2 } as const;
+    row.lines.sort((a, b) => order[a.status] - order[b.status]);
+  }
+  return rows;
+}
+
+export interface ClaimGroups {
+  mismatch: ClaimRow[];
+  match: ClaimRow[];
+  unverified: ClaimRow[];
+}
+
+export function groupClaims(result: CheckResult): ClaimGroups {
+  const rows = claimRows(result);
+  return {
+    mismatch: rows.filter((r) => r.status === "mismatch").sort((a, b) => b.weight - a.weight),
+    match: rows.filter((r) => r.status === "match"),
+    unverified: rows.filter((r) => r.status === "unverified"),
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// The plain-English explanation. Only confirmed conflicts are given as reasons for suspicion.
+// ---------------------------------------------------------------------------------------------
 
 const join = (parts: string[]) =>
   parts.length <= 1 ? (parts[0] ?? "") : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
-const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
-const quote = (c: Check) => `“${c.claim}”`;
+const upper = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-function whenOf(c: Check): string {
-  const m = /around (\d{1,2}):\d{2}/.exec(c.record);
-  if (!m) return "";
-  const h = Number(m[1]);
-  return h >= 17 ? " that evening" : h >= 12 ? " that afternoon" : " that day";
-}
-
-/** One plain-English sentence for the hero, built from the evidence (not from the AI). */
-export function plainSummary(result: CheckResult): string {
-  const kinds = result.checks.some((c) => c.kind);
-  if (!kinds && !result.breakdown) return result.summary;
-  const risk = riskLevel(result);
-  const find = (k: CheckKind) => result.checks.find((c) => c.kind === k);
-  const factor = (icon: FactorIcon) => result.breakdown?.find((f) => f.icon === icon && f.points > 0);
-
-  let head = "";
-  const tails: string[] = [];
-
-  const cap = find("impossible_capacity");
-  const closed = find("impossible_closed");
-  const hours = find("impossible_hours");
-  if (cap) {
-    const n = /seats (\d+)/.exec(cap.record)?.[1];
-    head = `claims ${quote(cap)}`;
-    tails.push(n ? `your largest table seats ${n}` : "that is more than you can seat");
-  } else if (closed) {
-    head = "claims a visit on a day you were closed";
-  } else if (hours) {
-    head = "claims a visit at a time you weren't serving";
-  }
-  const noBill = find("no_bill");
-  if (noBill) tails.push(`there's no matching bill${whenOf(noBill)}`);
-  if (find("no_reservation")) tails.push("there's no matching reservation");
-  if (find("no_free_tables")) tails.push("your tables were already full then");
-  if (find("no_dish")) tails.push("the dish isn't on the matching bill");
-  if (factor("burst")) tails.push("it was posted during a burst of one-star reviews");
-  const similar = factor("similar");
-  if (similar) tails.push(`its ${lower(similar.label)}`);
-  if (factor("wording")) tails.push("the wording reads as vague or exaggerated");
-
-  if (risk === "high") {
-    if (head) return `This review ${head}${tails.length ? `, but ${join(tails)}` : ""}.`;
-    return tails.length ? `This review looks suspicious: ${join(tails.slice(0, 3))}.` : result.summary;
-  }
-  if (risk === "medium") {
-    if (tails.length) return `We couldn't confirm this review: ${join(tails.slice(0, 3))}. That isn't proof it's fake.`;
-    return "There isn't much in this review that can be checked against your records, so we can't tell either way.";
-  }
-  const good: string[] = [];
-  const bill = find("order_found");
-  if (bill) good.push(`a matching bill was found (${/Bill (\S+)/.exec(bill.record)?.[1] ?? "on file"})`);
-  if (find("reservation_found")) good.push("a matching reservation was found");
-  if (find("hours_ok")) good.push("the day and time fit your opening hours");
-  if (find("dish_found")) good.push("the dish is on the bill");
-  return good.length
-    ? `This looks like a genuine complaint: ${join(good)}.`
-    : "Nothing in this review clashes with your records.";
-}
-
-export type EvidenceTone = "supports" | "contradicts" | "missing" | "context";
-export type EvidenceIcon = "bill" | "reservation" | "hours" | "dish" | "capacity" | "closed" | "tables" | "busy" | "info";
-
-export interface EvidenceItem {
-  tone: EvidenceTone;
-  icon: EvidenceIcon;
-  claim?: string;
-  text: string;
-}
-
-const ICON_BY_KIND: Partial<Record<CheckKind, EvidenceIcon>> = {
-  order_found: "bill",
-  reservation_found: "reservation",
-  hours_ok: "hours",
-  dish_found: "dish",
-  impossible_capacity: "capacity",
-  impossible_closed: "closed",
-  impossible_hours: "hours",
-  no_free_tables: "tables",
-  no_bill: "bill",
-  no_reservation: "reservation",
-  no_dish: "dish",
+const CONFLICT_PHRASE: Partial<Record<CheckKind, string>> = {
+  impossible_capacity: "the party size is larger than any table you have",
+  impossible_closed: "the restaurant was closed that day",
+  impossible_hours: "the restaurant was closed at the time mentioned",
+  no_bill: "no bill on file matches the party described",
+  no_reservation: "no reservation on file matches",
+  no_free_tables: "your tables were already full at that time",
+  no_dish: "a dish named isn't on the matching bill",
 };
 
-/** Splits the checks into "evidence found" (supports or contradicts) and "missing evidence" (couldn't confirm). */
-export function groupEvidence(result: CheckResult): { found: EvidenceItem[]; missing: EvidenceItem[] } {
-  const found: EvidenceItem[] = [];
-  const missing: EvidenceItem[] = [];
-  for (const c of result.checks) {
-    const icon = (c.kind && ICON_BY_KIND[c.kind]) || "info";
-    const item = { icon, claim: c.claim, text: c.record };
-    if (c.status === "match") found.push({ tone: "supports", ...item });
-    else if (c.kind && IMPOSSIBLE.includes(c.kind)) found.push({ tone: "contradicts", ...item });
-    else if (c.kind === "no_free_tables") found.push({ tone: "contradicts", ...item });
-    else if (c.kind && MISSING_KINDS.includes(c.kind)) missing.push({ tone: "missing", ...item });
-    else if (c.status === "mismatch") found.push({ tone: "contradicts", ...item }); // older results without a kind
-    else missing.push({ tone: "missing", ...item });
+/** 2-3 sentences for the owner. Honest: a missing record is "can't be checked", never a reason for suspicion. */
+export function explain(result: CheckResult): string {
+  const rows = claimRows(result);
+  const conflictRows = rows.filter((r) => r.status === "mismatch");
+  const sentences: string[] = [];
+
+  if (conflictRows.length === 0) {
+    sentences.push(rows.length === 0 ? "This review makes no claims that can be checked against your records." : "No claim in this review conflicts with your records.");
+  } else {
+    const reasons: string[] = [];
+    for (const row of conflictRows) {
+      for (const l of row.lines) {
+        const phrase = l.status === "mismatch" && l.kind ? CONFLICT_PHRASE[l.kind] : undefined;
+        if (phrase && !reasons.includes(phrase)) reasons.push(phrase);
+      }
+    }
+    const n = conflictRows.length;
+    sentences.push(
+      `${n === 1 ? "One claim conflicts" : `${n} claims conflict`} with your records${reasons.length ? `: ${join(reasons)}` : ""}.`,
+    );
   }
-  const v = result.visit;
-  if (v) {
-    const how = v.rank === 1 ? "the busiest day on file" : v.rank <= 2 ? "one of the busiest days on file" : "a quieter day";
-    found.push({
-      tone: "context",
-      icon: "busy",
-      text: `${v.label} was ${how}: ${v.bills} bill${v.bills === 1 ? "" : "s"}, ${v.covers} guests (${v.daysOnFile} days on file).`,
-    });
-  }
-  return { found, missing };
+
+  // What does fit.
+  const good: string[] = [];
+  const kinds = new Set(rows.flatMap((r) => r.lines.filter((l) => l.status === "match").map((l) => l.kind)));
+  const billId = /Bill (\S+)/.exec(rows.flatMap((r) => r.lines).find((l) => l.kind === "order_found")?.text ?? "")?.[1];
+  if (kinds.has("order_found")) good.push(`a bill${billId ? ` (${billId})` : ""} matches the party described`);
+  if (kinds.has("reservation_found")) good.push("a reservation matches");
+  if (kinds.has("hours_ok")) good.push("the day and time fit your opening hours");
+  if (kinds.has("dish_found")) good.push("the dish is on the bill");
+  if (good.length) sentences.push(`${conflictRows.length ? "Other details do fit" : upper(join(good))}${conflictRows.length ? `: ${join(good)}` : ""}.`);
+
+  // What can't be checked.
+  const open: string[] = [];
+  const unverified = rows.filter((r) => r.status === "unverified");
+  const typed = (t: ClaimType) => unverified.some((r) => r.type === t);
+  if (typed("staff")) open.push("the complaint about the staff");
+  if (typed("wait_time")) open.push("the wait time");
+  if (typed("food_quality")) open.push("the comment about the food");
+  if (typed("other")) open.push("the general comments");
+  if (unverified.some((r) => r.lines.some((l) => l.kind === "no_data"))) open.push("the details for a day with no bills or reservations on file");
+  const known = new Set(open).size;
+  if (known === 0 && unverified.length > 0) open.push(unverified.length === 1 ? "one claim" : `${unverified.length} claims`);
+  if (open.length) sentences.push(`${upper(join(open))} can't be checked from your records.`);
+
+  return sentences.slice(0, 3).join(" ");
 }
+
+// ---------------------------------------------------------------------------------------------
+// The score toggle: every point added, grouped, each tied to the claim it came from.
+// ---------------------------------------------------------------------------------------------
+
+const CONFLICT_ICONS: FactorIcon[] = ["capacity", "closed", "hours", "bill", "reservation", "dish", "tables"];
+
+function groupOf(f: Factor): FactorGroup {
+  if (f.group) return f.group;
+  if (f.points < 0) return "trust";
+  return f.icon && CONFLICT_ICONS.includes(f.icon) ? "mismatch" : "signal"; // older results
+}
+
+export function groupedFactors(result: CheckResult): Record<FactorGroup, Factor[]> | null {
+  if (!result.breakdown) return null;
+  const out: Record<FactorGroup, Factor[]> = { mismatch: [], missing: [], signal: [], trust: [] };
+  for (const f of result.breakdown) out[groupOf(f)].push(f);
+  out.mismatch.sort((a, b) => b.points - a.points);
+  return out;
+}
+
+/** Reasons, biggest impact first. Points that add trust come after the ones that add suspicion. */
+export function sortedFactors(factors: Factor[]): Factor[] {
+  return [...factors].sort((a, b) => b.points - a.points);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Underlining the checked claims inside the review text.
+// ---------------------------------------------------------------------------------------------
 
 export interface Segment {
   text: string;
-  status: Check["status"] | null;
+  status: RowStatus | null;
   title?: string;
 }
 
-const RANK: Record<Check["status"], number> = { mismatch: 3, match: 2, no_record: 1 };
-
-/** Cuts the review text into pieces so the checked claims can be underlined where they appear. */
-export function claimSegments(text: string, checks: Check[]): Segment[] {
-  const byClaim = new Map<string, Check>();
-  for (const c of checks) {
-    const key = c.claim.trim();
-    const prev = byClaim.get(key);
-    if (!prev || RANK[c.status] > RANK[prev.status]) byClaim.set(key, c);
-  }
+/** Cuts the review text into pieces so each claim can be underlined where it appears. */
+export function claimSegments(text: string, result: CheckResult): Segment[] {
   const lowerText = text.toLowerCase();
-  const spans: { start: number; end: number; check: Check }[] = [];
-  for (const [claim, check] of byClaim) {
-    const needle = claim.toLowerCase().replace(/[.!?]+$/, "");
+  const spans: { start: number; end: number; row: ClaimRow }[] = [];
+  for (const row of claimRows(result)) {
+    const needle = row.claim.trim().toLowerCase().replace(/[.!?]+$/, "");
     if (needle.length < 3) continue;
     const start = lowerText.indexOf(needle);
-    if (start !== -1) spans.push({ start, end: start + needle.length, check });
+    if (start !== -1) spans.push({ start, end: start + needle.length, row });
   }
   spans.sort((a, b) => a.start - b.start || b.end - a.end);
   const segments: Segment[] = [];
@@ -165,14 +227,9 @@ export function claimSegments(text: string, checks: Check[]): Segment[] {
   for (const s of spans) {
     if (s.start < at) continue; // overlaps one already marked
     if (s.start > at) segments.push({ text: text.slice(at, s.start), status: null });
-    segments.push({ text: text.slice(s.start, s.end), status: s.check.status, title: s.check.record });
+    segments.push({ text: text.slice(s.start, s.end), status: s.row.status, title: s.row.lines[0]?.text });
     at = s.end;
   }
   if (at < text.length) segments.push({ text: text.slice(at), status: null });
   return segments.length ? segments : [{ text, status: null }];
-}
-
-/** Reasons, biggest impact first. Points that add trust come after the ones that add suspicion. */
-export function sortedFactors(factors: Factor[]): Factor[] {
-  return [...factors].sort((a, b) => b.points - a.points);
 }

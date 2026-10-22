@@ -1,8 +1,6 @@
 import { PdfDoc, type Rasterizer } from "./pdf";
-import { plainSummary, RISK_LABEL, riskLevel, sortedFactors, type Risk } from "./risk";
+import { explain, groupClaims, groupedFactors, RISK_LABEL, riskLevel, type ClaimRow, type Risk } from "./risk";
 import type { CheckResult, ReviewItem } from "./types";
-
-const STATUS_LABEL = { match: "Match", mismatch: "Mismatch", no_record: "No record" } as const;
 
 const TONE: Record<Risk, { color: [number, number, number]; fill: [number, number, number] }> = {
   high: { color: [0.72, 0.13, 0.11], fill: [0.99, 0.9, 0.88] },
@@ -13,7 +11,17 @@ const TONE: Record<Risk, { color: [number, number, number]; fill: [number, numbe
 const longDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
-/** An evidence report the owner can attach to a Google "report review" request. Returns the PDF bytes. */
+const GROUPS: { key: "mismatch" | "match" | "unverified"; title: string; color: [number, number, number]; none: string }[] = [
+  { key: "mismatch", title: "Confirmed mismatch: the records conflict with the claim", color: [0.72, 0.13, 0.11], none: "No claim conflicts with the records." },
+  { key: "match", title: "Confirmed match: the records support the claim", color: [0.09, 0.5, 0.24], none: "No claim could be matched to a record." },
+  { key: "unverified", title: "Can't verify: no record either way", color: [0.34, 0.38, 0.45], none: "Every claim we could check had a record." },
+];
+
+function rowCells(row: ClaimRow): string[] {
+  return [`"${row.claim}"`, row.lines.map((l) => `${l.source ?? "Not recorded"}: ${l.text}`).join("\n")];
+}
+
+/** The case as a PDF the owner can keep or attach to a report to Google. Returns the PDF bytes. */
 export function buildEvidencePdf(opts: {
   restaurant: string;
   review: ReviewItem;
@@ -25,9 +33,9 @@ export function buildEvidencePdf(opts: {
   const { restaurant, review, result, generatedOn } = opts;
   const doc = new PdfDoc(opts.raster ?? null);
   const muted: [number, number, number] = [0.42, 0.34, 0.26];
-
   const risk = riskLevel(result);
   const forGoogle = risk === "high";
+
   doc.text(forGoogle ? "Evidence report" : "Case report", { size: 22, font: "bold" });
   doc.text(`${restaurant || "Restaurant"} · prepared ${longDate(generatedOn.toISOString())}`, { size: 10.5, color: muted });
   doc.gap(6);
@@ -40,41 +48,48 @@ export function buildEvidencePdf(opts: {
   doc.text(`"${review.text}"`, { font: "italic", size: 10.5 });
   doc.gap(10);
 
-  doc.text("Our assessment", { size: 12, font: "bold" });
+  doc.text("What we found", { size: 12, font: "bold" });
   doc.gap(4);
   doc.stamp(RISK_LABEL[risk], TONE[risk].color, TONE[risk].fill);
-  doc.text(`Risk score ${result.score ?? "n/a"} out of 100. Verdict: ${result.verdict}, confidence ${result.confidence}%.`, { size: 10, color: muted });
-  doc.text(plainSummary(result), { size: 10.5 });
+  if (typeof result.score === "number") doc.text(`Score ${result.score} out of 100`, { size: 9.5, color: muted });
+  doc.text(explain(result), { size: 11 });
   doc.gap(10);
 
-  if (result.breakdown && result.breakdown.length > 0) {
-    doc.text("Why this score", { size: 12, font: "bold" });
-    doc.gap(2);
-    for (const f of sortedFactors(result.breakdown)) {
-      doc.text(`${f.points > 0 ? "+" : "-"}${Math.abs(f.points)}   ${f.label}`, { size: 10 });
+  const groups = groupClaims(result);
+  for (const g of GROUPS) {
+    doc.text(g.title, { size: 11.5, font: "bold", color: g.color });
+    doc.gap(3);
+    const rows = groups[g.key];
+    if (rows.length === 0) doc.text(g.none, { size: 9.5, color: muted });
+    else doc.table(["Claim in the review", "Source, and what the records say"], rows.map(rowCells), [doc.width * 0.32, doc.width * 0.68]);
+    if (g.key === "unverified" && rows.length > 0) {
+      doc.text("Missing data is not proof the review is untrue.", { size: 9, color: muted, font: "italic" });
     }
-    doc.gap(10);
+    doc.gap(6);
   }
 
-  doc.text("Claims in the review compared with our records", { size: 12, font: "bold" });
-  doc.gap(4);
-  if (result.checks.length === 0) {
-    doc.text("The review makes no factual claims that can be checked.", { size: 10 });
-  } else {
-    doc.table(
-      ["Claim in the review", "Result", "What our records show"],
-      result.checks.map((c) => [`"${c.claim}"`, STATUS_LABEL[c.status], c.record]),
-      [doc.width * 0.36, doc.width * 0.15, doc.width * 0.49],
-    );
+  const factors = groupedFactors(result);
+  if (factors && result.breakdown.length > 0) {
+    doc.text("How the score was calculated", { size: 12, font: "bold" });
+    doc.gap(2);
+    const parts: [string, typeof factors.mismatch][] = [
+      ["Conflicts with the records", factors.mismatch],
+      ["Missing data", factors.missing],
+      ["Other signals", factors.signal],
+      ["Supporting evidence", factors.trust],
+    ];
+    for (const [label, list] of parts) {
+      for (const f of list) doc.text(`${f.points > 0 ? "+" : "-"}${Math.abs(f.points)}   ${f.label}  (${label.toLowerCase()})`, { size: 9.5 });
+    }
+    doc.gap(6);
   }
-  doc.gap(8);
 
   doc.rule();
   doc.gap(4);
   doc.text(
     forGoogle
-      ? "These points come from the restaurant's own opening hours, table capacity, reservation and bill records. They show where the review's details do not fit those records. This is a reasoned suspicion, not proof, and the restaurant is asking Google to review the post against its content policies. No customer names or payment details are included."
-      : "This summary compares the review with the restaurant's own opening hours, table capacity, reservation and bill records. Missing evidence means a claim could not be confirmed. It is not proof that a review is fake. No customer names or payment details are included.",
+      ? "These points come from the restaurant's own opening hours, table capacity, reservation and bill records. They show where details in the review conflict with those records, and the restaurant is asking Google to review the post against its content policies. Missing data is not proof of anything. No customer names or payment details are included."
+      : "This summary compares the review with the restaurant's own opening hours, table capacity, reservation and bill records. Claims that could not be checked are marked as such, and missing data is not proof the review is untrue. No customer names or payment details are included.",
     { size: 9, color: muted },
   );
 

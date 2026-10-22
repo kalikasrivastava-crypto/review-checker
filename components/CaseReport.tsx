@@ -1,52 +1,36 @@
 "use client";
 
 import { useRef, useState } from "react";
+import ClaimBreakdown, { claimDomId } from "./ClaimBreakdown";
 import Icon from "./Icons";
 import RemovalReport from "./RemovalReport";
 import ReplyComposer, { defaultApproach } from "./ReplyComposer";
 import ReviewQuote from "./ReviewQuote";
-import RiskRing from "./RiskRing";
+import ScoreHow from "./ScoreHow";
 import { useApp, type Entry } from "./AppProvider";
 import { downloadCasePdf } from "@/lib/download-pdf";
 import { buildRemovalReport } from "@/lib/report";
-import { groupEvidence, plainSummary, riskLevel, RISK_LABEL, sortedFactors, type EvidenceItem, type Risk } from "@/lib/risk";
+import { explain, groupClaims, riskLevel, RISK_LABEL, type Risk } from "@/lib/risk";
 import { buildManagerMessage, whatsappLink } from "@/lib/share";
 import type { CheckResult, ReplyApproach, ReviewItem } from "@/lib/types";
 
 const NEXT: Record<Risk, { label: string; why: string; approach: ReplyApproach }> = {
   high: {
     label: "Report to Google",
-    why: "Several details don't fit your records. Report it with the evidence summary below, and keep any reply polite.",
+    why: "Details in this review conflict with your records. Report it with the evidence summary below, and keep any reply polite.",
     approach: "factual",
   },
   medium: {
     label: "Reply politely and ask them to contact you",
-    why: "We couldn't confirm this one, which isn't proof it's fake. Invite them to get in touch so you can find out what happened.",
+    why: "We couldn't confirm this one, and that isn't proof of anything. Invite them to get in touch so you can find out what happened.",
     approach: "contact",
   },
   low: {
     label: "Apologise and fix the issue",
-    why: "This looks like a genuine complaint. A sincere apology and a quick fix is the best answer.",
+    why: "Nothing here conflicts with your records. A sincere apology and a quick fix is the best answer.",
     approach: "apology",
   },
 };
-
-function EvidenceRow({ item }: { item: EvidenceItem }) {
-  const badge =
-    item.tone === "supports" ? "Supports" : item.tone === "contradicts" ? "Contradicts" : item.tone === "missing" ? "Not found" : "Context";
-  return (
-    <li className={`ev-item evi-${item.tone}`}>
-      <span className="ev-icon">
-        <Icon name={item.icon} />
-      </span>
-      <div className="ev-body">
-        {item.claim && <p className="ev-claim">&ldquo;{item.claim}&rdquo;</p>}
-        <p className="ev-text">{item.text}</p>
-      </div>
-      <span className="ev-badge">{badge}</span>
-    </li>
-  );
-}
 
 export default function CaseReport({
   review,
@@ -66,9 +50,16 @@ export default function CaseReport({
   const composerRef = useRef<HTMLDivElement>(null);
   const reportRef = useRef<HTMLDivElement>(null);
 
-  const factors = result.breakdown ? sortedFactors(result.breakdown) : null;
-  const { found, missing } = groupEvidence(result);
+  const groups = groupClaims(result);
   const next = NEXT[risk];
+  const [focusId, setFocusId] = useState<string | null>(null);
+
+  /** Jump from a line of the score to the claim it came from, and flash that claim. */
+  function jumpToClaim(id: string) {
+    setFocusId(id);
+    document.getElementById(claimDomId(id))?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTimeout(() => setFocusId((cur) => (cur === id ? null : cur)), 2600);
+  }
 
   const latestDraft = Object.values(entry.replies ?? {}).sort((a, b) => b.at.localeCompare(a.at))[0];
   const whatsapp = whatsappLink(
@@ -112,87 +103,32 @@ export default function CaseReport({
             </ReviewQuote>
           </div>
 
-          {/* 2. Risk level (the hero) */}
+          {/* 2. Risk level: the explanation is the main thing, the score is only a summary */}
           <section className="panel risk-hero case-section" style={{ ["--i" as string]: 1 }} aria-live="polite">
             <div className="hero-top">
               <span className="stamp">{RISK_LABEL[risk]}</span>
-              {typeof result.score === "number" && <RiskRing score={result.score} />}
+              {typeof result.score === "number" && (
+                <span className="score-pill" title="A summary of the points listed below">
+                  Score <strong>{result.score}</strong>
+                  <small>/100</small>
+                </span>
+              )}
             </div>
-            <p className="hero-summary">{plainSummary(result)}</p>
-            <p className="hero-meta">
-              Verdict: <strong>{result.verdict}</strong> · confidence {result.confidence}%
-            </p>
+            <p className="hero-explain">{explain(result)}</p>
+            <ScoreHow result={result} onJump={jumpToClaim} />
           </section>
         </div>
 
         <div className="case-col">
-          {/* 3. Why it was flagged */}
-          <section className="panel case-section" style={{ ["--i" as string]: 2 }}>
-            <h2>{risk === "low" ? "Why it looks fine" : factors?.some((f) => f.points > 0) ? "Why it was flagged" : "Why we're unsure"}</h2>
-            {factors === null ? (
-              <p className="muted small">This result was saved before reasons were recorded. Re-check it to see them.</p>
-            ) : factors.length === 0 ? (
-              <p className="reasons-empty">
-                <Icon name="trust" />{" "}
-                {risk === "medium" ? "Nothing raised suspicion, but there was very little to check." : "Nothing in this review raised suspicion."}
-              </p>
-            ) : (
-              <ul className="reasons">
-                {factors.map((f, i) => (
-                  <li key={i} className={f.points > 0 ? "reason reason-up" : "reason reason-down"}>
-                    <span className="reason-icon">
-                      <Icon name={f.icon ?? (f.points > 0 ? "info" : "trust")} />
-                    </span>
-                    <span className="reason-label">{f.label}</span>
-                    <span className="pts">
-                      {f.points > 0 ? "+" : "−"}
-                      {Math.abs(f.points)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          {/* 4. Evidence found */}
-          <section className="panel ev-section ev-found case-section" style={{ ["--i" as string]: 3 }}>
-            <h2>
-              <Icon name="check" className="icon icon-h" /> Evidence found
-            </h2>
-            {found.length === 0 ? (
-              <p className="muted small">No record could be matched to this review.</p>
-            ) : (
-              <ul className="ev-list">
-                {found.map((it, i) => (
-                  <EvidenceRow key={i} item={it} />
-                ))}
-              </ul>
-            )}
-          </section>
-
-          {/* 5. Missing evidence */}
-          <section className="panel ev-section ev-missing case-section" style={{ ["--i" as string]: 4 }}>
-            <h2>
-              <Icon name="question" className="icon icon-h" /> Missing evidence
-            </h2>
-            {missing.length === 0 ? (
-              <p className="muted small">Nothing missing: every claim we could check had a record.</p>
-            ) : (
-              <ul className="ev-list">
-                {missing.map((it, i) => (
-                  <EvidenceRow key={i} item={it} />
-                ))}
-              </ul>
-            )}
-            <p className="ev-note">
-              Missing evidence means we <strong>couldn&apos;t confirm</strong> something. It is not proof that the review is fake.
-            </p>
+          {/* 3. Claim by claim, in three groups */}
+          <section className="panel claims-panel case-section" style={{ ["--i" as string]: 2 }}>
+            <ClaimBreakdown groups={groups} visit={result.visit} focusId={focusId} />
           </section>
         </div>
       </div>
 
-      {/* 6. Recommended next action */}
-      <section className="panel next case-section" style={{ ["--i" as string]: 5 }}>
+      {/* 4. Recommended next action */}
+      <section className="panel next case-section" style={{ ["--i" as string]: 3 }}>
         <p className="next-kicker">Recommended next step</p>
         <p className="next-why">{next.why}</p>
         <div className="next-main">

@@ -20,7 +20,7 @@ export default function RecordsPanel({ custom, demoCounts, onChange }: Props) {
           <>
             <p>
               Using <strong>your uploaded records</strong>. Anything you haven&apos;t uploaded counts as &ldquo;no
-              record&rdquo;, so a missing file never makes a review look fake.
+              record&rdquo;, so a missing file never counts against a review.
             </p>
             <ul className="preview-list">
               <li>

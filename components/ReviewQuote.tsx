@@ -19,7 +19,7 @@ export default function ReviewQuote({
   result?: CheckResult;
   children?: React.ReactNode;
 }) {
-  const segments = result ? claimSegments(review.text, result.checks) : [{ text: review.text, status: null }];
+  const segments = result ? claimSegments(review.text, result) : [{ text: review.text, status: null }];
   const marked = segments.some((s) => s.status);
 
   return (
@@ -49,8 +49,8 @@ export default function ReviewQuote({
         <p className="claim-legend">
           Underlined = checked against your records:
           <span className="claim claim-match">matches</span>
-          <span className="claim claim-mismatch">doesn&apos;t fit</span>
-          <span className="claim claim-no_record">no record</span>
+          <span className="claim claim-mismatch">conflicts</span>
+          <span className="claim claim-unverified">can&apos;t verify</span>
         </p>
       )}
       {entry.note && <p className="notice notice-warning">{entry.note}</p>}

@@ -1,6 +1,6 @@
 # DineTrust
 
-A daily tool for restaurant owners to tell fair bad Google reviews from suspicious ones. DineTrust checks each review's claims against your own opening hours, tables, bills and reservations, shows a score with the reasons, and helps you reply calmly, report fakes and brief your manager.
+A daily tool for restaurant owners to tell fair bad Google reviews from suspicious ones. DineTrust checks each review's claims against your own opening hours, tables, bills and reservations, shows a score with the reasons, and helps you reply calmly, report reviews that conflict with your records and brief your manager.
 
 ## What is in the app
 
@@ -8,7 +8,7 @@ A daily tool for restaurant owners to tell fair bad Google reviews from suspicio
 |---|---|
 | **Dashboard** (home) | Average rating, reviews this week, % suspicious and reviews waiting for a reply. A rating trend line, a suspicious-vs-genuine chart and a "Needs attention" list of new 1–2 star reviews with a one-click Check. |
 | **Inbox** | Every review with a status (New → Checked → Replied → Reported), filters (status, stars, verdict, date), search, and a bulk **Check selected** queue with a progress bar. Add reviews by pasting them in. |
-| **Case Report** (one screen per checked review) | The review as a quote with the checked claims underlined; a big HIGH / MEDIUM / LOW RISK stamp with a score ring and a one-sentence summary; "why it was flagged" as weighted reasons, biggest first; "evidence found" (bill and booking numbers, opening hours, how busy that day was) and "missing evidence" (what we expected but couldn't find, which is not proof of anything); then one recommended next step: Report to Google (report text and PDF) for high risk, a polite reply asking them to get in touch for medium, an apology and a fix (plus WhatsApp the manager) for low. A ready-made reply in English, Hindi or Hinglish with Warm, Professional or Short tone is shown at once, with no AI call, and can be tailored with one AI call. Reviews you added yourself can be deleted, with a confirm step. |
+| **Case Report** (one screen per checked review) | The review as a quote with every claim underlined (green matches, red conflicts, dotted grey can't verify). A HIGH / MEDIUM / LOW RISK stamp with a small score beside it and a 2-3 sentence plain-English explanation that gives only confirmed conflicts as reasons. "Claim by claim" in three groups: **Confirmed mismatch** (your records contradict it), **Confirmed match** (your records support it) and **Can't verify / missing data** (opinions like rude staff or cold food, or no data for that day), each claim with its evidence and a source label (POS bills, Reservations, Opening hours, Restaurant settings, Footfall). A "How this score was calculated" toggle lists every point and jumps to the claim it came from. Then one recommended next step by risk level, a ready-made reply in English, Hindi or Hinglish (no AI needed), PDF, WhatsApp and mark as replied. Reviews you added yourself can be deleted, with a confirm step. |
 | **Insights** | Footfall calendar (how busy each day was, next to the days bad reviews claim visits), complaints grouped by theme, and look-alike reviews. |
 | **Records** | Upload bills and reservations as CSV with a column-mapping step, or use the demo data. Sample CSVs to download. |
 | **My Restaurant** | Name, contact details, opening hours per day with lunch and dinner times, number of tables, seats per table, how long a party keeps a table, and the largest party you can seat. Every check uses these, including whether enough tables were free at the time a review says it visited. A first-time setup walks you through it, with a "demo restaurant" shortcut. |
@@ -87,7 +87,7 @@ The app is built for Gemini's free plan, which allows only a few AI calls a minu
 
 | Target design | What is built here |
 |---|---|
-| Claude analyses reviews | Gemini (`gemini-3.6-flash` by default, with fallbacks when its free quota runs out). One small file, `lib/ai.ts`, makes the call, so switching provider means changing only that file. |
+| Claude analyses reviews | Gemini only extracts the claims; it never sees your records and never judges the review. Every comparison and every point of the score is plain code. Model: Gemini (`gemini-3.6-flash` by default, with fallbacks when its free quota runs out). One small file, `lib/ai.ts`, makes the call, so switching provider means changing only that file. |
 | n8n runs the workflow | No n8n. The claim checks, burst rule, similarity check and scoring are plain TypeScript in `lib/`. n8n can return for scheduled pulls from Google. |
 | Reviews from a CSV or Google | 23 seeded demo reviews plus a form to add your own. No CSV import of reviews and no Google connection. |
 | Approve and Edit | Replies are editable, copyable and can be marked as replied. Nothing is posted to Google or WhatsApp for you. |
@@ -133,7 +133,7 @@ Open http://localhost:3000 and either finish the short setup or choose "Skip and
 ```
 app/page.tsx              the app shell: header, tabs, onboarding gate
 app/about/page.tsx        the About page
-app/api/check/route.ts    AI call 1: read the review, then run the checks and scoring
+app/api/check/route.ts    AI call 1: pull the claims out of the review. Code then checks them and scores the case
 app/api/reply/route.ts    AI call 2: draft a reply (language, tone, approach)
 app/api/insights/route.ts dashboard data, footfall, themes, look-alike reviews (no AI)
 components/               Dashboard, Inbox, ReviewDetail, ReplyComposer, SettingsPanel, ...

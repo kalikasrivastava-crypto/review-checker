@@ -52,10 +52,10 @@ export async function POST(request: Request) {
   const others = sanitizeReviews((input as { others?: unknown })?.others);
   const burst = isBurst(review, others.length ? [...others, review] : [review]);
   const similar = mostSimilar(review, others);
-  const settled = settleVerdict({ ai: reading, checks, burst, text: review.text, similar });
+  const settled = settleVerdict({ checks, burst, text: review.text, similar });
 
   return reply({
     ok: true,
-    result: { ...settled, checks, burst, aiVerdict: reading.verdict, visit },
+    result: { ...settled, checks, burst, visit },
   });
 }

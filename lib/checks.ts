@@ -2,7 +2,12 @@ import { toMinutes, type Order, type Records, type ServiceWindow } from "./recor
 import { describeDay } from "./settings";
 import { isLowDetail } from "./patterns";
 import type { Similar } from "./similarity";
-import type { AiReading, Check, CheckKind, Claim, Factor, FactorIcon, Review, Verdict, Visit } from "./types";
+import type { Check, CheckKind, Claim, EvidenceSource, Factor, FactorIcon, Review, Verdict, Visit } from "./types";
+
+/**
+ * Everything here runs in plain code. The AI only supplies the claims; every comparison with the
+ * restaurant's records happens in this file, and the records never leave the server.
+ */
 
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 const WINDOW_MINUTES = 90;
@@ -14,14 +19,24 @@ function ymd(d: Date): string {
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
-function cap(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 function pretty(date: string): string {
   const d = new Date(`${date}T00:00:00`);
   return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 }
+
+const hhmm = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+
+/** Claims about how something felt or how long it took. Bills and opening hours can't confirm or deny these. */
+const SUBJECTIVE = new Set<Claim["type"]>(["wait_time", "staff", "food_quality", "other"]);
+
+const SUBJECTIVE_TEXT: Record<string, string> = {
+  wait_time: "Waiting times aren't recorded, so this can't be checked.",
+  staff: "How staff behaved isn't recorded, so this can't be checked.",
+  food_quality: "How the food tasted isn't recorded, so this can't be checked.",
+  other: "Your records can't confirm or deny this.",
+};
 
 /** The visit came before the review, so a weekday means its most recent occurrence. */
 export function resolveDate(claim: Claim, reviewDate: Date): string | null {
@@ -39,35 +54,6 @@ function windowAt(windows: ServiceWindow[], time: number): ServiceWindow | undef
   return windows.find((w) => time >= toMinutes(w.open)! && time <= toMinutes(w.close)!);
 }
 
-/** Things the records alone rule out: closed days, hours with no service, tables bigger than any we have. */
-function impossibleReason(claim: Claim, date: string | null, records: Records): { reason: string; kind: CheckKind } | null {
-  const { hours } = records;
-  // Opinions and waiting times say nothing about when or how many, whatever the AI copied onto them.
-  if (claim.type === "wait_time" || claim.type === "other") return null;
-  const aboutPartySize = claim.type === "party_size" || claim.type === "reservation" || claim.type === "bill";
-  if (aboutPartySize && claim.party_size !== null && claim.party_size > hours.maxPartySize) {
-    return {
-      reason: `Largest table seats ${hours.maxPartySize}; a party of ${claim.party_size} exceeds capacity.`,
-      kind: "impossible_capacity",
-    };
-  }
-  if (!date) return null;
-  const dayName = WEEKDAYS[new Date(`${date}T00:00:00`).getDay()];
-  const windows = hours.days[dayName] ?? [];
-  if (windows.length === 0) {
-    return { reason: `${pretty(date)}: the restaurant is closed on ${cap(dayName)}s.`, kind: "impossible_closed" };
-  }
-  const time = toMinutes(claim.time);
-  if (time !== null && !windowAt(windows, time)) {
-    const noLunch = !windows.some((w) => w.name === "Lunch") && time >= 11 * 60 && time <= 16 * 60 ? ", no lunch service" : "";
-    return {
-      reason: `${pretty(date)}: open ${describeDay(windows)}${noLunch}, so ${claim.time} is outside service hours.`,
-      kind: "impossible_hours",
-    };
-  }
-  return null;
-}
-
 function nearOrders(orders: Order[], date: string, time: number | null, party: number | null): Order[] {
   return orders.filter(
     (o) =>
@@ -76,8 +62,6 @@ function nearOrders(orders: Order[], date: string, time: number | null, party: n
       (party === null || o.partySize === party),
   );
 }
-
-const hhmm = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 
 /** "a party of 10 on Fri 16 Oct around 20:00" */
 function describeVisit(date: string, claim: Claim): string {
@@ -100,97 +84,30 @@ function itemMatches(orderItems: string, wanted: string): boolean {
   return words.length > 0 && words.every((w) => haystack.includes(w));
 }
 
-/** Look one claim up in the records. One row per claim. */
-export function checkClaim(claim: Claim, reviewDate: Date, records: Records): Check {
-  const date = resolveDate(claim, reviewDate);
-  const impossible = impossibleReason(claim, date, records);
-  if (impossible) return { claim: claim.text, record: impossible.reason, status: "mismatch", kind: impossible.kind };
-  return lookupClaim(claim, date, records);
-}
+const tablesFor = (party: number, seatsPerTable: number) => Math.ceil(party / Math.max(1, seatsPerTable));
 
-/** Look the claim up in the bills and reservations (after the "is it even possible" checks). */
-function lookupClaim(claim: Claim, date: string | null, records: Records): Check {
-  const row = (status: Check["status"], record: string, kind?: CheckKind): Check => ({ claim: claim.text, record, status, kind });
-
-  if (claim.type === "wait_time" || claim.type === "other") {
-    return row("no_record", "Waiting times and opinions aren't recorded.");
-  }
-  if (!date) return row("no_record", "Couldn't tell which day this refers to.");
-
-  const dayOrders = records.orders.filter((o) => o.date === date);
-  const dayRes = records.reservations.filter((r) => r.date === date);
-  const time = toMinutes(claim.time);
-
-  switch (claim.type) {
-    case "date_time": {
-      if (time === null) return row("no_record", `${pretty(date)}: no time given to check.`);
-      const windows = records.hours.days[WEEKDAYS[new Date(`${date}T00:00:00`).getDay()]] ?? [];
-      const w = windowAt(windows, time);
-      return row(
-        "match",
-        `Open ${pretty(date)}${w ? `, ${w.name} ${w.open}–${w.close}` : ""}. The claimed time (${claim.time}) fits.`,
-        "hours_ok",
-      );
-    }
-    case "reservation": {
-      if (dayRes.length === 0) return row("no_record", `No reservations on file for ${pretty(date)}.`);
-      const fits = dayRes.filter(
-        (r) =>
-          (time === null || Math.abs(r.minutes - time) <= 60) &&
-          (claim.party_size === null || r.partySize === claim.party_size),
-      );
-      if (fits.length > 0) {
-        const r = closest(fits, time);
-        return row(
-          "match",
-          `Reservation${r.ref ? ` ${r.ref}` : ""} · ${pretty(date)} at ${hhmm(r.minutes)} · party of ${r.partySize}.`,
-          "reservation_found",
-        );
-      }
-      return row("mismatch", `No reservation found for ${describeVisit(date, claim)}.`, "no_reservation");
-    }
-    case "party_size":
-    case "bill": {
-      if (dayOrders.length === 0) return row("no_record", `No bills on file for ${pretty(date)}.`);
-      if (claim.type === "party_size" && claim.party_size === null) {
-        return row("no_record", `${pretty(date)}: no party size to check.`);
-      }
-      const found = nearOrders(records.orders, date, time, claim.party_size);
-      if (found.length > 0) {
-        const o = closest(found, time);
-        return row(
-          "match",
-          `Bill${o.billId ? ` ${o.billId}` : ""} · ${pretty(date)} at ${hhmm(o.minutes)} · party of ${o.partySize}.`,
-          "order_found",
-        );
-      }
-      return row("mismatch", `No bill found for ${describeVisit(date, claim)}.`, "no_bill");
-    }
-    case "item_ordered": {
-      if (!claim.item) return row("no_record", "No dish named to check.");
-      if (dayOrders.length === 0) return row("no_record", `No bills on file for ${pretty(date)}.`);
-      const visit = nearOrders(records.orders, date, time, claim.party_size);
-      if (visit.length === 0) {
-        return row("no_record", `${pretty(date)}: couldn't pin down the visit to check the dish.`);
-      }
-      const withDish = visit.find((o) => itemMatches(o.items, claim.item!));
-      return withDish
-        ? row("match", `"${claim.item}" is on bill${withDish.billId ? ` ${withDish.billId}` : ""} (${pretty(date)}).`, "dish_found")
-        : row("mismatch", `"${claim.item}" is not on the matching bill${visit[0]?.billId ? ` (${visit[0].billId})` : ""}.`, "no_dish");
-    }
-  }
+/**
+ * The AI sometimes mislabels an opinion as a checkable claim ("disappointing for the price" as a bill).
+ * Only a claim that actually mentions paying, a bill or a booking is treated as one.
+ */
+function sanitizeClaim(c: Claim): Claim {
+  if (c.type === "bill" && !/\b(paid|pay|paying|bill|billed|charged|receipt|invoice|card|cash|tip|tipped)\b|[₹$£€]|\d/i.test(c.text)) return { ...c, type: "other" };
+  if (c.type === "reservation" && !/\b(book|booked|booking|reserve|reserved|reservation)\b/i.test(c.text)) return { ...c, type: "other" };
+  if (c.type === "item_ordered" && !c.item) return { ...c, type: "other" };
+  return c;
 }
 
 /**
  * A review usually describes one visit ("table of 10 on Friday at 8 PM"), but the AI may put the
  * day, time and party size on only one claim. Fill the gaps from the visit described elsewhere.
  */
-function withVisitContext(claims: Claim[]): Claim[] {
+function withVisitContext(rawClaims: Claim[]): Claim[] {
+  const claims = rawClaims.map(sanitizeClaim);
   const first = <K extends "weekday" | "date" | "time" | "party_size">(key: K) =>
-    claims.find((c) => c.type !== "wait_time" && c.type !== "other" && c[key] !== null)?.[key] ?? null;
+    claims.find((c) => !SUBJECTIVE.has(c.type) && c[key] !== null)?.[key] ?? null;
   const ctx = { weekday: first("weekday"), date: first("date"), time: first("time"), party_size: first("party_size") };
   return claims.map((c) => {
-    if (c.type === "wait_time" || c.type === "other") return c;
+    if (SUBJECTIVE.has(c.type)) return c;
     const needsParty = c.type === "item_ordered" || c.type === "bill" || c.type === "reservation";
     return {
       ...c,
@@ -202,36 +119,163 @@ function withVisitContext(claims: Claim[]): Claim[] {
   });
 }
 
-const tablesFor = (party: number, seatsPerTable: number) => Math.ceil(party / Math.max(1, seatsPerTable));
-
 /**
- * If a claimed party can't be found in the bills or reservations, were there even enough free tables
- * at that time? Tables in use = every bill that started within the usual meal length before then.
- * Needs bills for that day: with none on file we can't say the room was full.
+ * All the evidence for one claim, one entry per source. A claim can be contradicted by one source
+ * and supported by another (too big a party, but at an hour you were open), so it can have several.
  */
-function tableCheck(claim: Claim, reviewDate: Date, row: Check, records: Records): Check | null {
-  const partyClaim = claim.type === "party_size" || claim.type === "reservation" || claim.type === "bill";
-  if (!partyClaim || claim.party_size === null) return null;
-  if (row.kind !== "no_bill" && row.kind !== "no_reservation") return null;
+function evidenceFor(claim: Claim, cid: string, reviewDate: Date, records: Records): Check[] {
+  const out: Check[] = [];
+  const add = (status: Check["status"], record: string, kind: CheckKind, source?: EvidenceSource) =>
+    out.push({ cid, claim: claim.text, record, status, kind, source, ctype: claim.type });
+
+  if (SUBJECTIVE.has(claim.type)) {
+    add("no_record", SUBJECTIVE_TEXT[claim.type], "subjective");
+    return out;
+  }
+
+  const { hours } = records;
   const date = resolveDate(claim, reviewDate);
   const time = toMinutes(claim.time);
-  if (!date || time === null) return null;
-  const dayOrders = records.orders.filter((o) => o.date === date);
-  if (dayOrders.length === 0) return null;
+  const partyClaim = claim.type === "party_size" || claim.type === "reservation" || claim.type === "bill";
+  let closedOrOutside = false;
 
-  const { tables, seatsPerTable, mealMinutes } = records.hours;
-  const inUse = dayOrders
-    .filter((o) => o.minutes <= time && time < o.minutes + mealMinutes)
-    .reduce((sum, o) => sum + tablesFor(o.partySize, seatsPerTable), 0);
-  const free = Math.max(0, tables - inUse);
-  const need = tablesFor(claim.party_size, seatsPerTable);
-  if (need <= free) return null;
-  return {
-    claim: claim.text,
-    status: "mismatch",
-    kind: "no_free_tables",
-    record: `${pretty(date)} around ${claim.time}: ${Math.min(inUse, tables)} of ${tables} tables were in use, leaving ${free}. A party of ${claim.party_size} needs ${need}.`,
-  };
+  // Restaurant settings: is the party bigger than any table you have?
+  if (partyClaim && claim.party_size !== null && claim.party_size > hours.maxPartySize) {
+    add(
+      "mismatch",
+      `Your largest table seats ${hours.maxPartySize}; a party of ${claim.party_size} is more than that.`,
+      "impossible_capacity",
+      "Restaurant settings",
+    );
+  }
+
+  // Opening hours: were you open then?
+  if (date) {
+    const dayName = WEEKDAYS[new Date(`${date}T00:00:00`).getDay()];
+    const windows = hours.days[dayName] ?? [];
+    if (windows.length === 0) {
+      closedOrOutside = true;
+      add("mismatch", `${pretty(date)}: the restaurant is closed on ${cap(dayName)}s.`, "impossible_closed", "Opening hours");
+    } else if (time !== null) {
+      const w = windowAt(windows, time);
+      if (!w) {
+        closedOrOutside = true;
+        const noLunch = !windows.some((x) => x.name === "Lunch") && time >= 11 * 60 && time <= 16 * 60 ? ", no lunch service" : "";
+        add(
+          "mismatch",
+          `${pretty(date)}: open ${describeDay(windows)}${noLunch}, so ${claim.time} is outside service hours.`,
+          "impossible_hours",
+          "Opening hours",
+        );
+      } else {
+        add("match", `Open ${pretty(date)}, ${w.name} ${w.open}–${w.close}. The claimed time (${claim.time}) fits.`, "hours_ok", "Opening hours");
+      }
+    }
+  }
+
+  // Bills and reservations: is the visit on file?
+  const bills = claim.type === "party_size" || claim.type === "bill" || claim.type === "item_ordered";
+  if (!closedOrOutside && date) {
+    const dayOrders = records.orders.filter((o) => o.date === date);
+    const dayRes = records.reservations.filter((r) => r.date === date);
+
+    if (claim.type === "reservation") {
+      if (dayRes.length === 0) {
+        add("no_record", `No reservations on file for ${pretty(date)}, so this can't be confirmed either way.`, "no_data", "Reservations");
+      } else {
+        const fits = dayRes.filter(
+          (r) => (time === null || Math.abs(r.minutes - time) <= 60) && (claim.party_size === null || r.partySize === claim.party_size),
+        );
+        if (fits.length > 0) {
+          const r = closest(fits, time);
+          add(
+            "match",
+            `Reservation${r.ref ? ` ${r.ref}` : ""} · ${pretty(date)} at ${hhmm(r.minutes)} · party of ${r.partySize}.`,
+            "reservation_found",
+            "Reservations",
+          );
+        } else {
+          add("mismatch", `No reservation found for ${describeVisit(date, claim)}.`, "no_reservation", "Reservations");
+        }
+      }
+    } else if (bills && claim.type !== "item_ordered") {
+      if (claim.party_size === null && claim.type === "party_size") {
+        add("no_record", `${pretty(date)}: no party size given, so there is nothing to compare with the bills.`, "vague", "POS bills");
+      } else if (dayOrders.length === 0) {
+        add("no_record", `No bills on file for ${pretty(date)}, so this can't be confirmed either way.`, "no_data", "POS bills");
+      } else {
+        const found = nearOrders(records.orders, date, time, claim.party_size);
+        if (found.length > 0) {
+          const o = closest(found, time);
+          add(
+            "match",
+            `Bill${o.billId ? ` ${o.billId}` : ""} · ${pretty(date)} at ${hhmm(o.minutes)} · party of ${o.partySize}.`,
+            "order_found",
+            "POS bills",
+          );
+        } else {
+          add("mismatch", `No bill found for ${describeVisit(date, claim)}.`, "no_bill", "POS bills");
+        }
+      }
+    } else if (claim.type === "item_ordered") {
+      if (!claim.item) {
+        add("no_record", "No dish was named, so there is nothing to look for on the bills.", "vague", "POS bills");
+      } else if (dayOrders.length === 0) {
+        add("no_record", `No bills on file for ${pretty(date)}, so this can't be confirmed either way.`, "no_data", "POS bills");
+      } else {
+        const visit = nearOrders(records.orders, date, time, claim.party_size);
+        if (visit.length === 0) {
+          add("no_record", `${pretty(date)}: couldn't pin down which bill this was, so the dish can't be checked.`, "vague", "POS bills");
+        } else {
+          const withDish = visit.find((o) => itemMatches(o.items, claim.item!));
+          if (withDish) {
+            add("match", `"${claim.item}" is on bill${withDish.billId ? ` ${withDish.billId}` : ""} (${pretty(date)}).`, "dish_found", "POS bills");
+          } else {
+            add(
+              "mismatch",
+              `"${claim.item}" is not on the matching bill${visit[0]?.billId ? ` (${visit[0].billId})` : ""}.`,
+              "no_dish",
+              "POS bills",
+            );
+          }
+        }
+      }
+    }
+
+    // Footfall: if the party isn't on the bills, were there even enough free tables?
+    const missedBill = out.some((c) => c.kind === "no_bill" || c.kind === "no_reservation");
+    if (missedBill && claim.party_size !== null && time !== null && dayOrders.length > 0) {
+      const { tables, seatsPerTable, mealMinutes } = hours;
+      const inUse = dayOrders
+        .filter((o) => o.minutes <= time && time < o.minutes + mealMinutes)
+        .reduce((sum, o) => sum + tablesFor(o.partySize, seatsPerTable), 0);
+      const free = Math.max(0, tables - inUse);
+      const need = tablesFor(claim.party_size, seatsPerTable);
+      if (need > free) {
+        add(
+          "mismatch",
+          `${pretty(date)} around ${claim.time}: ${Math.min(inUse, tables)} of ${tables} tables were in use, leaving ${free}. A party of ${claim.party_size} needs ${need}.`,
+          "no_free_tables",
+          "Footfall",
+        );
+      }
+    }
+  }
+
+  // Nothing at all could be checked: say so plainly instead of leaving the claim without a row.
+  if (out.length === 0) {
+    const reason = !date
+      ? "No day was given, so there is nothing to check against your records."
+      : claim.type === "date_time"
+        ? `${pretty(date)}: no time was given, so the opening hours can't be checked.`
+        : "Not enough detail to check this against your records.";
+    add("no_record", reason, "vague");
+  }
+  return out;
+}
+
+export function buildChecks(claims: Claim[], reviewDate: Date, records: Records): Check[] {
+  return withVisitContext(claims).flatMap((c, i) => evidenceFor(c, `c${i}`, reviewDate, records));
 }
 
 /** How busy the restaurant was on the day the review says it visited (needs bills for that day). */
@@ -255,19 +299,6 @@ export function visitInfo(claims: Claim[], reviewDate: Date, records: Records): 
   return { date, label: pretty(date), bills: day.bills, covers: day.covers, rank, daysOnFile: perDay.size };
 }
 
-export function buildChecks(claims: Claim[], reviewDate: Date, records: Records): Check[] {
-  return withVisitContext(claims).flatMap((c) => {
-    const row = checkClaim(c, reviewDate, records);
-    // A party too big for any table also can't be in the bills. Say so as well: it is separate evidence.
-    if (row.kind === "impossible_capacity") {
-      const lookup = lookupClaim(c, resolveDate(c, reviewDate), records);
-      return lookup.kind === "no_bill" || lookup.kind === "no_reservation" ? [row, lookup] : [row];
-    }
-    const tables = tableCheck(c, reviewDate, row, records);
-    return tables ? [row, tables] : [row];
-  });
-}
-
 /** True when this one-star review sits in a 24-hour window holding 3 or more one-star reviews. */
 export function isBurst(review: Review, all: Review[]): boolean {
   if (review.rating !== 1) return false;
@@ -282,19 +313,24 @@ export function isBurst(review: Review, all: Review[]): boolean {
   });
 }
 
+// ---------------------------------------------------------------------------------------------
+// Scoring. Confirmed conflicts with the records drive the score. Missing data adds very little.
+// Opinions with no data add nothing. Without a confirmed conflict a review can never reach High.
+// ---------------------------------------------------------------------------------------------
+
 const clamp = (n: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, Math.round(n)));
 
-const SUSPICION_LINE = 40; // from this score up, a review is called Suspicious
+export const HIGH_LINE = 40; // from this score up a review is High risk, and only a confirmed conflict can get there
+const NO_CONFLICT_CEILING = HIGH_LINE - 1;
 
-/** Weights for each kind of evidence. Positive adds suspicion, negative adds trust. */
-const RISK_POINTS: Partial<Record<CheckKind, { points: number; label: string; icon: FactorIcon }>> = {
+const CONFLICT_POINTS: Partial<Record<CheckKind, { points: number; label: string; icon: FactorIcon }>> = {
   impossible_capacity: { points: 40, label: "Party size is bigger than your largest table", icon: "capacity" },
   impossible_closed: { points: 40, label: "Visit claimed on a day you are closed", icon: "closed" },
   impossible_hours: { points: 40, label: "Visit claimed outside your service hours", icon: "hours" },
-  no_bill: { points: 25, label: "No matching bill found", icon: "bill" },
-  no_reservation: { points: 25, label: "No matching reservation found", icon: "reservation" },
-  no_dish: { points: 15, label: "A dish named is not on the matching bill", icon: "dish" },
+  no_bill: { points: 25, label: "No matching bill on file", icon: "bill" },
+  no_reservation: { points: 25, label: "No matching reservation on file", icon: "reservation" },
   no_free_tables: { points: 20, label: "Not enough free tables at that time for that party", icon: "tables" },
+  no_dish: { points: 15, label: "A dish named is not on the matching bill", icon: "dish" },
 };
 const TRUST_POINTS: Partial<Record<CheckKind, { points: number; label: string; icon: FactorIcon }>> = {
   order_found: { points: -20, label: "A matching bill was found for the party size and time", icon: "trust" },
@@ -302,57 +338,89 @@ const TRUST_POINTS: Partial<Record<CheckKind, { points: number; label: string; i
   dish_found: { points: -10, label: "A dish named is on the matching bill", icon: "trust" },
 };
 const MAX_TRUST = -35;
+const MISSING_DATA_POINTS = 3; // per claim that couldn't be checked because there was no data for that day
+const MAX_MISSING_POINTS = 6;
+const MAX_SIGNAL_POINTS = 20;
 
 export interface Signals {
-  ai: Pick<AiReading, "verdict" | "confidence" | "summary">;
   checks: Check[];
   burst: boolean;
   text: string;
   similar?: Similar | null;
 }
 
-const IMPOSSIBLE: CheckKind[] = ["impossible_capacity", "impossible_closed", "impossible_hours"];
+export const isConflict = (c: Check) => c.status === "mismatch";
 
 /** The weighted reasons behind a review's score, and the total (0-100). */
-export function scoreReview({ ai, checks, burst, text, similar }: Signals): { score: number; breakdown: Factor[] } {
+export function scoreReview({ checks, burst, text, similar }: Signals): { score: number; breakdown: Factor[] } {
   const breakdown: Factor[] = [];
+
+  // 1. Confirmed conflicts with the records (these drive the score).
   const seen = new Set<string>();
   for (const c of checks) {
-    const rule = c.kind ? RISK_POINTS[c.kind] : undefined;
-    if (rule && !seen.has(c.kind!)) {
-      seen.add(c.kind!);
-      breakdown.push(rule);
+    const rule = c.kind ? CONFLICT_POINTS[c.kind] : undefined;
+    const key = `${c.cid}:${c.kind}`;
+    if (rule && !seen.has(key)) {
+      seen.add(key);
+      breakdown.push({ ...rule, group: "mismatch", checkId: c.cid });
     }
   }
-  if (burst) breakdown.push({ label: "Posted during a burst of one-star reviews", points: 15, icon: "burst" });
+  const conflicts = breakdown.length;
+
+  // 2. Missing data: very little, and only where there should have been a record.
+  let missing = 0;
+  for (const c of checks) {
+    if (c.kind === "no_data" && missing + MISSING_DATA_POINTS <= MAX_MISSING_POINTS) {
+      missing += MISSING_DATA_POINTS;
+      breakdown.push({
+        label: c.source === "Reservations" ? "No reservation data on file for that day" : "No bill data on file for that day",
+        points: MISSING_DATA_POINTS,
+        icon: c.source === "Reservations" ? "reservation" : "bill",
+        group: "missing",
+        checkId: c.cid,
+      });
+    }
+  }
+
+  // 3. Other signals about the review, capped. Never enough to make a review High on their own.
+  const signals: Factor[] = [];
+  if (burst) signals.push({ label: "Posted during a burst of one-star reviews", points: 10, icon: "burst", group: "signal" });
   if (similar) {
-    breakdown.push({
+    signals.push({
       label: `Wording is ${Math.round(similar.score * 100)}% like ${similar.author}'s review`,
-      points: 20,
+      points: 10,
       icon: "similar",
+      group: "signal",
     });
   }
-  if (ai.verdict === "Suspicious") breakdown.push({ label: "The wording itself reads as vague or exaggerated", points: 25, icon: "wording" });
-  if (isLowDetail(text)) breakdown.push({ label: "Strong feeling but no details to check", points: 10, icon: "detail" });
+  if (isLowDetail(text)) signals.push({ label: "Strong feeling but no details to check", points: 5, icon: "detail", group: "signal" });
+  let signalTotal = 0;
+  for (const f of signals) {
+    if (signalTotal + f.points <= MAX_SIGNAL_POINTS) {
+      signalTotal += f.points;
+      breakdown.push(f);
+    }
+  }
 
-  // Trust only counts when nothing in the review is impossible: an impossible claim can't be offset.
-  const impossible = checks.some((c) => c.kind && IMPOSSIBLE.includes(c.kind));
+  // 4. Supporting evidence lowers the score, but never offsets a claim that is impossible.
+  const impossible = checks.some((c) => c.kind === "impossible_capacity" || c.kind === "impossible_closed" || c.kind === "impossible_hours");
   if (!impossible) {
     let trust = 0;
     for (const c of checks) {
       const rule = c.kind ? TRUST_POINTS[c.kind] : undefined;
       if (rule && trust + rule.points >= MAX_TRUST) {
         trust += rule.points;
-        breakdown.push(rule);
+        breakdown.push({ ...rule, group: "trust", checkId: c.cid });
       }
     }
   }
 
-  const score = clamp(breakdown.reduce((sum, f) => sum + f.points, 0));
+  let score = clamp(breakdown.reduce((sum, f) => sum + f.points, 0));
+  if (conflicts === 0) score = Math.min(score, NO_CONFLICT_CEILING);
   return { score, breakdown };
 }
 
-/** Settle the final verdict in plain code from the score. "No record" never makes a review look fake. */
+/** Settle the final verdict from the score. A missing record never counts as a conflict. */
 export function settleVerdict(signals: Signals): {
   verdict: Verdict;
   confidence: number;
@@ -360,24 +428,25 @@ export function settleVerdict(signals: Signals): {
   score: number;
   breakdown: Factor[];
 } {
-  const { ai, checks } = signals;
+  const { checks } = signals;
   const { score, breakdown } = scoreReview(signals);
   const matches = checks.filter((c) => c.status === "match");
   const strong = matches.filter((c) => c.kind && c.kind !== "hours_ok").length;
-  const risks = breakdown.filter((f) => f.points > 0).sort((a, b) => b.points - a.points);
-  const impossible = checks.find((c) => c.kind && IMPOSSIBLE.includes(c.kind));
 
-  if (score >= SUSPICION_LINE) {
-    const summary = impossible
-      ? `A claim in this review doesn't fit your records: ${impossible.record}`
-      : `Several signals add up: ${risks.slice(0, 2).map((f) => f.label.charAt(0).toLowerCase() + f.label.slice(1)).join("; ")}.`;
-    return { verdict: "Suspicious", confidence: clamp(50 + score / 2, 55, 97), summary, score, breakdown };
+  if (score >= HIGH_LINE) {
+    return {
+      verdict: "Suspicious",
+      confidence: clamp(50 + score / 2, 55, 97),
+      summary: "Details in this review conflict with your records.",
+      score,
+      breakdown,
+    };
   }
   if (matches.length >= 2 && strong >= 1 && score < 20) {
     return {
       verdict: "Verified",
       confidence: clamp(60 + 10 * matches.length - score, 70, 97),
-      summary: `${matches.length} claims in this review match your records.`,
+      summary: `${matches.length} details in this review match your records.`,
       score,
       breakdown,
     };
@@ -386,10 +455,7 @@ export function settleVerdict(signals: Signals): {
     return {
       verdict: "Plausible",
       confidence: clamp(50 + 8 * matches.length - score / 2, 45, 85),
-      summary:
-        risks.length > 0
-          ? `The claims that can be checked mostly fit your records, but note: ${risks[0].label.charAt(0).toLowerCase()}${risks[0].label.slice(1)}.`
-          : "The claims that can be checked match your records; the rest can't be verified from them.",
+      summary: "The details that can be checked fit your records.",
       score,
       breakdown,
     };
@@ -397,10 +463,7 @@ export function settleVerdict(signals: Signals): {
   return {
     verdict: "Unverifiable",
     confidence: clamp(60 - score / 2, 35, 60),
-    summary:
-      risks.length > 0
-        ? `Not enough to call it suspicious, but ${risks[0].label.charAt(0).toLowerCase()}${risks[0].label.slice(1)}.`
-        : ai.summary || "Nothing in this review can be checked against your records.",
+    summary: "Not enough in this review could be confirmed from your records.",
     score,
     breakdown,
   };
