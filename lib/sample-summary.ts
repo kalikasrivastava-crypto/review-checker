@@ -7,6 +7,7 @@ export interface SampleSummary {
   averageRating: number | null;
   themes: { key: string; label: string; reviews: number; positive: number; mixed: number; negative: number; sentiment: Tone | null }[];
   topPriority: { label: string; concerned: number } | null;
+  priorities: { rank: number; label: string; concerned: number }[];
 }
 
 /**
@@ -17,7 +18,8 @@ export function summariseSample(csvText: string): SampleSummary {
   const file = readReviewFile(csvText);
   const { reviews } = buildReviews(file.rows, file.guess);
   const analysis = analyseReviews(reviews);
-  const top = buildPriorities(analysis).priorities[0];
+  const priorities = buildPriorities(analysis).priorities;
+  const top = priorities[0];
   return {
     reviewCount: analysis.reviewCount,
     averageRating: analysis.averageRating,
@@ -26,5 +28,6 @@ export function summariseSample(csvText: string): SampleSummary {
       .sort((a, b) => Number(a.key === "other") - Number(b.key === "other") || b.reviews - a.reviews)
       .map((t) => ({ key: t.key, label: t.label, reviews: t.reviews, positive: t.positive, mixed: t.mixed, negative: t.negative, sentiment: t.sentiment })),
     topPriority: top ? { label: top.label, concerned: top.concernedReviews } : null,
+    priorities: priorities.map((p) => ({ rank: p.rank, label: p.label, concerned: p.concernedReviews })),
   };
 }

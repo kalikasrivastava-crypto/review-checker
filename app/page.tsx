@@ -1,5 +1,5 @@
 import Link from "next/link";
-import GlanceCard from "@/components/GlanceCard";
+import DashboardPreview from "@/components/DashboardPreview";
 import SiteFooter from "@/components/SiteFooter";
 import SiteHeader from "@/components/SiteHeader";
 import { IconBars, IconFile, IconPlan, IconQuote, IconShield, IconThemes, IconUpload, IconOverview } from "@/components/UiIcons";
@@ -43,7 +43,7 @@ export default function Landing() {
               </div>
               <p className="hero__note">No sign-up. Your file is read in your browser and never uploaded.</p>
             </div>
-            <GlanceCard />
+            <DashboardPreview />
           </section>
 
           <section className="section" id="how-it-works" aria-labelledby="how-title">
