@@ -1,0 +1,58 @@
+[
+  {
+    "id": "g1",
+    "author": "Priya S.",
+    "rating": 3,
+    "date": "2026-10-16T09:00:00",
+    "text": "We went on Thursday around 6:30 PM, party of 4. The food was good but we waited about 35 minutes just for our appetizers and nobody told us why. Service was friendly once things arrived."
+  },
+  {
+    "id": "g2",
+    "author": "Marcus T.",
+    "rating": 2,
+    "date": "2026-10-15T12:00:00",
+    "text": "Dinner on Tuesday at about 7 PM, just the two of us. I asked for my steak medium and it came out well done and dry. The server offered to remake it but we were already hungry and it felt rushed."
+  },
+  {
+    "id": "g3",
+    "author": "Elena R.",
+    "rating": 2,
+    "date": "2026-10-19T08:00:00",
+    "text": "Sunday evening, around 6 PM, party of 3. We waited close to 40 minutes for our mains and the soup arrived lukewarm. The staff was apologetic but it was disappointing for the price."
+  },
+  {
+    "id": "m1",
+    "author": "Dan K.",
+    "rating": 1,
+    "date": "2026-10-19T14:00:00",
+    "text": "Our table of 10 on Friday around 8 PM was completely ignored. We waited an hour and nobody took our order. Absolutely the worst service I have ever experienced."
+  },
+  {
+    "id": "m2",
+    "author": "Chris W.",
+    "rating": 2,
+    "date": "2026-10-21T09:00:00",
+    "text": "Stopped in for a quick lunch around 1 PM on Tuesday and the host said the kitchen wasn't ready. We stood at the door for 20 minutes before giving up. Unwelcoming."
+  },
+  {
+    "id": "m3",
+    "author": "Jordan P.",
+    "rating": 1,
+    "date": "2026-10-21T11:00:00",
+    "text": "We had a reservation for 8 people on Saturday at 9 PM and they lost it, then made us wait 50 minutes for a table. Management did not care at all. Do not go here."
+  },
+  {
+    "id": "b1",
+    "author": "A. Smith",
+    "rating": 1,
+    "date": "2026-10-20T21:30:00",
+    "text": "Awful experience. We were there Saturday around 8 PM and the staff was rude, the food was cold and everything took forever. Never coming back."
+  },
+  {
+    "id": "b2",
+    "author": "Lee M.",
+    "rating": 1,
+    "date": "2026-10-21T06:10:00",
+    "text": "Worst dinner of my life. Got sick after eating there on Friday. Filthy place and terrible food, stay away from this restaurant."
+  }
+]
