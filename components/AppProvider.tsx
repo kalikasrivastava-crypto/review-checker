@@ -6,6 +6,7 @@ import { hashString } from "@/lib/sig";
 import { useHydrated, usePersisted } from "@/lib/store";
 import type { Insights } from "@/lib/insights";
 import type { CustomRecords } from "@/lib/records";
+import type { RestaurantSettings } from "@/lib/settings";
 import type { CheckResponse, CheckResult, ReviewItem } from "@/lib/types";
 
 export type Status = "new" | "checked" | "replied" | "reported";
@@ -59,6 +60,9 @@ interface AppValue {
   queue: QueueView;
   customRecords: CustomRecords | null;
   setCustomRecords: (next: CustomRecords | null) => void;
+  /** The owner's restaurant details. Null until they finish setup. */
+  settings: RestaurantSettings | null;
+  setSettings: (next: RestaurantSettings | null) => void;
   insights: Insights | null;
   insightsLoading: boolean;
   /** Waits until the free-tier limit allows another AI call. Use before any AI request. */
@@ -113,6 +117,8 @@ export default function AppProvider({ children }: { children: React.ReactNode })
   const [entries, setEntries] = usePersisted<Record<string, Entry>>("dt-entries-v1", EMPTY_ENTRIES);
   const [customRecords, setCustomRecords] = usePersisted<CustomRecords | null>("review-checker-records-v1", null);
 
+  const [settings, setSettings] = usePersisted<RestaurantSettings | null>("dt-settings-v1", null);
+
   const reviews = useMemo(
     () => [...DEMO_REVIEWS, ...added].sort((a, b) => b.date.localeCompare(a.date)),
     [added],
@@ -123,7 +129,7 @@ export default function AppProvider({ children }: { children: React.ReactNode })
     [reviews],
   );
 
-  const ctxSig = recordsSig(customRecords);
+  const ctxSig = `${recordsSig(customRecords)}|${settings ? hashString(JSON.stringify(settings)) : "demo"}`;
   const sigOf = useCallback(
     (r: ReviewItem) => hashString(`${r.text}|${r.rating}|${r.date}|${ctxSig}`),
     [ctxSig],
@@ -139,9 +145,9 @@ export default function AppProvider({ children }: { children: React.ReactNode })
   }, []);
 
   // ---- latest values for the async queue ----
-  const latest = useRef({ reviews, entries, customRecords, sigOf });
+  const latest = useRef({ reviews, entries, customRecords, settings, sigOf });
   useEffect(() => {
-    latest.current = { reviews, entries, customRecords, sigOf };
+    latest.current = { reviews, entries, customRecords, settings, sigOf };
   });
 
   const entryOf = useCallback((id: string): Entry => entries[id] ?? NEW_ENTRY, [entries]);
@@ -246,7 +252,7 @@ export default function AppProvider({ children }: { children: React.ReactNode })
     let busyRetries = 0;
     while (w.ids.length > 0 && !w.cancelled) {
       const id = w.ids[0];
-      const { reviews: all, customRecords: custom, sigOf: sig } = latest.current;
+      const { reviews: all, customRecords: custom, settings: owner, sigOf: sig } = latest.current;
       const review = all.find((r) => r.id === id);
       if (!review) {
         w.ids.shift();
@@ -280,6 +286,7 @@ export default function AppProvider({ children }: { children: React.ReactNode })
               .filter((o) => o.id !== review.id)
               .map((o) => ({ id: o.id, author: o.author, rating: o.rating, date: o.date, text: o.text })),
             ...(custom ? { records: { orders: custom.orders ?? [], reservations: custom.reservations ?? [] } } : {}),
+            ...(owner ? { settings: owner } : {}),
           }),
         });
         out = (await res.json()) as CheckResponse;
@@ -376,8 +383,9 @@ export default function AppProvider({ children }: { children: React.ReactNode })
         ...(customRecords
           ? { records: { orders: customRecords.orders ?? [], reservations: customRecords.reservations ?? [] } }
           : {}),
+        ...(settings ? { settings } : {}),
       }),
-    [reviews, customRecords],
+    [reviews, customRecords, settings],
   );
   useEffect(() => {
     if (!hydrated) return;
@@ -409,6 +417,8 @@ export default function AppProvider({ children }: { children: React.ReactNode })
     queue,
     customRecords,
     setCustomRecords,
+    settings,
+    setSettings,
     insights,
     insightsLoading,
     acquireAi,

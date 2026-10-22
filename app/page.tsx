@@ -4,29 +4,44 @@ import { useState } from "react";
 import Inbox from "@/components/Inbox";
 import Dashboard from "@/components/Dashboard";
 import InsightsPanel from "@/components/InsightsPanel";
+import Onboarding from "@/components/Onboarding";
 import QueueBar from "@/components/QueueBar";
 import RecordsPanel from "@/components/RecordsPanel";
+import SettingsPanel from "@/components/SettingsPanel";
 import { useApp } from "@/components/AppProvider";
 
 const DEMO_COUNTS = { bills: 25, reservations: 10 };
-type Tab = "dashboard" | "inbox" | "insights" | "records";
+type Tab = "dashboard" | "inbox" | "insights" | "records" | "restaurant";
 const TABS: { id: Tab; label: string }[] = [
   { id: "dashboard", label: "Dashboard" },
   { id: "inbox", label: "Inbox" },
   { id: "insights", label: "Insights" },
   { id: "records", label: "Records" },
+  { id: "restaurant", label: "My Restaurant" },
 ];
 
 export default function Home() {
-  const { customRecords, setCustomRecords } = useApp();
+  const { customRecords, setCustomRecords, settings, hydrated } = useApp();
   const [tab, setTab] = useState<Tab>("dashboard");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  if (!hydrated) {
+    return (
+      <div className="shell">
+        <header className="masthead">
+          <h1>DineTrust</h1>
+          <p>Check a suspicious Google review against your own records, then reply calmly.</p>
+        </header>
+      </div>
+    );
+  }
+  if (!settings) return <Onboarding />;
 
   return (
     <div className="shell">
       <header className="masthead">
         <h1>DineTrust</h1>
-        <p>Check a suspicious Google review against your own records, then reply calmly.</p>
+        <p>{settings.name ? `${settings.name} · ` : ""}Check a suspicious Google review against your own records, then reply calmly.</p>
       </header>
 
       <nav className="tabs" role="tablist" aria-label="Sections">
@@ -39,7 +54,10 @@ export default function Home() {
             aria-selected={tab === t.id}
             aria-controls={`panel-${t.id}`}
             className="tab"
-            onClick={() => setTab(t.id)}
+            onClick={(e) => {
+              setTab(t.id);
+              e.currentTarget.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+            }}
           >
             {t.label}
           </button>
@@ -73,6 +91,12 @@ export default function Home() {
       {tab === "records" && (
         <div role="tabpanel" id="panel-records" aria-labelledby="tab-records" className="narrow">
           <RecordsPanel custom={customRecords} demoCounts={DEMO_COUNTS} onChange={setCustomRecords} />
+        </div>
+      )}
+
+      {tab === "restaurant" && (
+        <div role="tabpanel" id="panel-restaurant" aria-labelledby="tab-restaurant" className="narrow">
+          <SettingsPanel />
         </div>
       )}
 

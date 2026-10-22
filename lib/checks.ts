@@ -1,4 +1,5 @@
-import { toMinutes, type Order, type Records } from "./records";
+import { toMinutes, type Order, type Records, type ServiceWindow } from "./records";
+import { describeDay } from "./settings";
 import type { AiReading, Check, Claim, Review, Verdict } from "./types";
 
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
@@ -31,6 +32,11 @@ function resolveDate(claim: Claim, reviewDate: Date): string | null {
   return ymd(d);
 }
 
+/** The service window that covers this time of day, if any. */
+function windowAt(windows: ServiceWindow[], time: number): ServiceWindow | undefined {
+  return windows.find((w) => time >= toMinutes(w.open)! && time <= toMinutes(w.close)!);
+}
+
 /** Things the records alone rule out: closed days, hours with no service, tables bigger than any we have. */
 function impossibleReason(claim: Claim, date: string | null, records: Records): string | null {
   const { hours } = records;
@@ -42,11 +48,12 @@ function impossibleReason(claim: Claim, date: string | null, records: Records): 
   }
   if (!date) return null;
   const dayName = WEEKDAYS[new Date(`${date}T00:00:00`).getDay()];
-  const day = hours.days[dayName];
-  if (day === null) return `${pretty(date)}: the restaurant is closed on ${cap(dayName)}s.`;
+  const windows = hours.days[dayName] ?? [];
+  if (windows.length === 0) return `${pretty(date)}: the restaurant is closed on ${cap(dayName)}s.`;
   const time = toMinutes(claim.time);
-  if (day && time !== null && (time < toMinutes(day.open)! || time > toMinutes(day.close)!)) {
-    return `${pretty(date)}: open ${day.open}–${day.close} (${hours.service}), so ${claim.time} is outside service hours.`;
+  if (time !== null && !windowAt(windows, time)) {
+    const noLunch = !windows.some((w) => w.name === "Lunch") && time >= 11 * 60 && time <= 16 * 60 ? ", no lunch service" : "";
+    return `${pretty(date)}: open ${describeDay(windows)}${noLunch}, so ${claim.time} is outside service hours.`;
   }
   return null;
 }
@@ -94,8 +101,9 @@ export function checkClaim(claim: Claim, reviewDate: Date, records: Records): Ch
   switch (claim.type) {
     case "date_time": {
       if (time === null) return row("no_record", `${pretty(date)}: no time given to check.`);
-      const day = records.hours.days[WEEKDAYS[new Date(`${date}T00:00:00`).getDay()]];
-      return row("match", `${pretty(date)}: ${claim.time} is within opening hours (${day?.open}–${day?.close}).`);
+      const windows = records.hours.days[WEEKDAYS[new Date(`${date}T00:00:00`).getDay()]] ?? [];
+      const w = windowAt(windows, time);
+      return row("match", `${pretty(date)}: ${claim.time} is within opening hours${w ? ` (${w.name} ${w.open}–${w.close})` : ""}.`);
     }
     case "reservation": {
       if (dayRes.length === 0) return row("no_record", `No reservations on file for ${pretty(date)}.`);

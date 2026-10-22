@@ -14,10 +14,17 @@ export interface Reservation {
   partySize: number;
 }
 
+export interface ServiceWindow {
+  name: string; // "Lunch" or "Dinner"
+  open: string;
+  close: string;
+}
+
+/** What the checks need to know about the restaurant. Built from the owner's settings. */
 export interface Hours {
-  service: string;
   maxPartySize: number;
-  days: Record<string, { open: string; close: string } | null>;
+  tables: number;
+  days: Record<string, ServiceWindow[]>; // an empty list means closed that day
 }
 
 export interface Records {

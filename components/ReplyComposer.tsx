@@ -3,6 +3,7 @@
 import { useState } from "react";
 import CopyButton from "./CopyButton";
 import { useApp, type Entry } from "./AppProvider";
+import { contactText } from "@/lib/settings";
 import type { CheckResult, ReplyResponse, ReplyTone, ReviewItem } from "@/lib/types";
 
 const APPROACHES: { value: ReplyTone; label: string; hint: string }[] = [
@@ -17,7 +18,7 @@ export const defaultApproach = (result: CheckResult): ReplyTone =>
 const keyFor = (approach: ReplyTone) => `${approach}|en|warm`;
 
 export default function ReplyComposer({ review, entry, result }: { review: ReviewItem; entry: Entry; result: CheckResult }) {
-  const { acquireAi, setReply, setStatus, toast } = useApp();
+  const { acquireAi, setReply, setStatus, settings, toast } = useApp();
   const [approach, setApproach] = useState<ReplyTone>(() => defaultApproach(result));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +40,7 @@ export default function ReplyComposer({ review, entry, result }: { review: Revie
           review: { id: review.id, author: review.author, rating: review.rating, date: review.date, text: review.text },
           checks: result.checks,
           tone: approach,
+          contact: contactText(settings),
         }),
       });
       const data = (await r.json()) as ReplyResponse;

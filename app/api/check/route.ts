@@ -1,7 +1,6 @@
 import { aiErrorMessage, AiError, askAI } from "@/lib/ai";
 import { buildChecks, isBurst, settleVerdict } from "@/lib/checks";
-import { loadDefaultRecords } from "@/lib/records-default";
-import { sanitizeUploaded, type Records } from "@/lib/records";
+import { buildRecords } from "@/lib/records-server";
 import { SCORE_SYSTEM, scoreUser } from "@/lib/prompts";
 import { parseAiReading, sanitizeReviews, validateReviewInput } from "@/lib/validate";
 import type { AiReading, CheckResponse } from "@/lib/types";
@@ -11,16 +10,6 @@ export const maxDuration = 40;
 
 function reply(body: CheckResponse, status = 200) {
   return Response.json(body, { status });
-}
-
-/**
- * The owner's own upload if there is one, otherwise the demo dataset. With an upload, a file that was
- * not provided counts as "no records" rather than falling back to demo data.
- */
-function recordsFor(input: unknown): Records {
-  const base = loadDefaultRecords();
-  const custom = sanitizeUploaded((input as { records?: unknown } | null)?.records);
-  return custom ? { ...base, orders: custom.orders, reservations: custom.reservations } : base;
 }
 
 export async function POST(request: Request) {
@@ -53,7 +42,10 @@ export async function POST(request: Request) {
   }
 
   // Plain code from here: check claims against the records, apply the burst rule, settle the verdict.
-  const checks = buildChecks(reading.claims, new Date(review.date), recordsFor(input));
+  const checks = buildChecks(reading.claims, new Date(review.date), buildRecords(
+      (input as { records?: unknown } | null)?.records,
+      (input as { settings?: unknown } | null)?.settings,
+    ).records);
   const others = sanitizeReviews((input as { others?: unknown })?.others);
   const burst = isBurst(review, others.length ? [...others, review] : [review]);
   const settled = settleVerdict(reading, checks, burst);

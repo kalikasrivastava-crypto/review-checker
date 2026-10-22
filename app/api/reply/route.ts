@@ -49,8 +49,12 @@ export async function POST(request: Request) {
     status: c.status,
   }));
 
+  // The owner's phone or email is filled in afterwards. It never goes to the AI.
+  const contact = typeof body.contact === "string" ? body.contact.trim().slice(0, 120) : "";
+
   try {
-    const text = await askAI(replySystem(tone), replyUser(checked.review, checks));
+    let text = await askAI(replySystem(tone), replyUser(checked.review, checks));
+    if (contact) text = text.replace(/\[phone or email\]/gi, contact);
     return reply({ ok: true, reply: text, warning: ruleWarning(text, checked.review) });
   } catch (err) {
     const code = err instanceof AiError ? err.code : "unavailable";
