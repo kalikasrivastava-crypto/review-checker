@@ -54,6 +54,7 @@ The evidence list is private. Never mention or hint at it. If a claim is marked 
 
 const REPLY_APPROACHES: Record<ReplyApproach, string> = {
   apology: `Approach: a genuine complaint. Thank the reviewer, apologise sincerely that their experience fell short, acknowledge the specific kind of problem they describe in general terms, and say what you will do to put it right (for example, talk it through with the team) without inventing specifics. Invite them to contact the restaurant at [phone or email].`,
+  contact: `Approach: polite and neutral, because the review could not be fully confirmed. Thank the reviewer, say you take every review to heart and would like to understand what happened, and ask them to contact the restaurant at [phone or email]. Do not apologise for specific details, do not say you could not find their visit, and do not repeat numbers or times from the review.`,
   factual: `Approach: polite and factual, because the visit could not be verified. Thank the reviewer for the feedback, say every review is taken seriously, say you were unable to find a visit matching the details described, and invite them to contact the restaurant at [phone or email] so you can look into it. Do not apologise for specific details, do not repeat numbers or times from the review, and do not say where you looked (no "system", "database" or "records").`,
 };
 

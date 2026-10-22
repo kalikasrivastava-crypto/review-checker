@@ -1,5 +1,5 @@
 import { aiErrorMessage, AiError, askAI } from "@/lib/ai";
-import { buildChecks, isBurst, settleVerdict } from "@/lib/checks";
+import { buildChecks, isBurst, settleVerdict, visitInfo } from "@/lib/checks";
 import { mostSimilar } from "@/lib/similarity";
 import { buildRecords } from "@/lib/records-server";
 import { SCORE_SYSTEM, scoreUser } from "@/lib/prompts";
@@ -43,10 +43,12 @@ export async function POST(request: Request) {
   }
 
   // Plain code from here: check claims against the records, apply the burst rule, settle the verdict.
-  const checks = buildChecks(reading.claims, new Date(review.date), buildRecords(
-      (input as { records?: unknown } | null)?.records,
-      (input as { settings?: unknown } | null)?.settings,
-    ).records);
+  const { records } = buildRecords(
+    (input as { records?: unknown } | null)?.records,
+    (input as { settings?: unknown } | null)?.settings,
+  );
+  const checks = buildChecks(reading.claims, new Date(review.date), records);
+  const visit = visitInfo(reading.claims, new Date(review.date), records);
   const others = sanitizeReviews((input as { others?: unknown })?.others);
   const burst = isBurst(review, others.length ? [...others, review] : [review]);
   const similar = mostSimilar(review, others);
@@ -54,6 +56,6 @@ export async function POST(request: Request) {
 
   return reply({
     ok: true,
-    result: { ...settled, checks, burst, aiVerdict: reading.verdict },
+    result: { ...settled, checks, burst, aiVerdict: reading.verdict, visit },
   });
 }

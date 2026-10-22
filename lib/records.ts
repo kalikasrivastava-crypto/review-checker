@@ -9,6 +9,7 @@ export interface Order {
 }
 
 export interface Reservation {
+  ref: string; // booking number, if the file has one
   date: string;
   minutes: number;
   partySize: number;
@@ -97,7 +98,7 @@ export const REQUIRED_FIELDS: RecordField[] = ["date", "time", "party_size"];
 /** Guess which column holds which field from the header names. */
 export function guessMapping(headers: string[], sample: string[][] = []): Mapping {
   const patterns: [RecordField, RegExp][] = [
-    ["bill_id", /bill|receipt|invoice|check\s?(no|id|#)|order\s?(no|id|#)|ticket/i],
+    ["bill_id", /bill|receipt|invoice|check\s?(no|id|#)|order\s?(no|id|#)|ticket|reservation[\s_-]?(no|id|number|#|ref)|booking[\s_-]?(no|id|number|#|ref)/i],
     ["party_size", /party|guest|cover|pax|people|diner|size/i],
     ["items", /item|dish|menu|product|food|order(?!\s?(no|id|#))/i],
     ["time", /time|hour|slot|seated|arriv|clock/i],
@@ -154,7 +155,7 @@ export function mapReservations(rows: string[][], mapping: Mapping): MapResult<R
     const minutes = normalizeTime(cell("time"));
     const partySize = normalizePartySize(cell("party_size"));
     if (!date || minutes === null || partySize === null) return null;
-    return { date, minutes, partySize } satisfies Reservation;
+    return { ref: cell("bill_id"), date, minutes, partySize } satisfies Reservation;
   }) as MapResult<Reservation>;
 }
 
@@ -192,7 +193,7 @@ export function sanitizeUploaded(input: unknown): { orders: Order[]; reservation
     const r = o as Partial<Reservation>;
     if (typeof r?.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(r.date)) return [];
     if (!Number.isFinite(r.minutes) || !Number.isFinite(r.partySize)) return [];
-    return [{ date: r.date, minutes: Number(r.minutes), partySize: Number(r.partySize) }];
+    return [{ ref: String(r.ref ?? "").slice(0, 40), date: r.date, minutes: Number(r.minutes), partySize: Number(r.partySize) }];
   });
   return { orders, reservations };
 }

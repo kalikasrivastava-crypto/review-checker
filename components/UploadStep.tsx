@@ -28,6 +28,7 @@ const FIELDS: Record<Kind, { field: RecordField; label: string }[]> = {
     { field: "date", label: "Date" },
     { field: "time", label: "Time" },
     { field: "party_size", label: "Party size" },
+    { field: "bill_id", label: "Booking number (optional)" },
   ],
 };
 

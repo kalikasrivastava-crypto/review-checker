@@ -67,9 +67,34 @@ export interface Check {
 }
 
 /** One line of the score breakdown. Positive points add suspicion, negative points add trust. */
+export type FactorIcon =
+  | "capacity"
+  | "closed"
+  | "hours"
+  | "bill"
+  | "reservation"
+  | "dish"
+  | "tables"
+  | "burst"
+  | "similar"
+  | "wording"
+  | "detail"
+  | "trust";
+
 export interface Factor {
   label: string;
   points: number;
+  icon?: FactorIcon;
+}
+
+/** How busy the restaurant was on the day the review says it visited. */
+export interface Visit {
+  date: string; // YYYY-MM-DD
+  label: string; // e.g. "Fri 16 Oct"
+  bills: number;
+  covers: number; // guests seated
+  rank: number; // 1 = busiest day on file
+  daysOnFile: number;
 }
 
 export interface CheckResult {
@@ -78,6 +103,7 @@ export interface CheckResult {
   summary: string;
   score: number; // 0-100 suspicion score
   breakdown: Factor[];
+  visit?: Visit | null;
   checks: Check[];
   burst: boolean;
   aiVerdict: AiReading["verdict"];
@@ -87,8 +113,8 @@ export type CheckResponse =
   | { ok: true; result: CheckResult }
   | { ok: false; error: string; code?: ErrorCode; notReview?: boolean };
 
-/** apology = genuine complaint (apology plus a fix); factual = can't verify it (polite, no admissions). */
-export type ReplyApproach = "apology" | "factual";
+/** apology = genuine complaint; contact = can't confirm, so invite them to get in touch; factual = couldn't find the visit. */
+export type ReplyApproach = "apology" | "contact" | "factual";
 export type ReplyLanguage = "en" | "hi" | "hinglish";
 export type ReplyStyle = "warm" | "professional" | "short";
 

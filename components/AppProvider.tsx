@@ -15,6 +15,8 @@ export interface ReplyDraft {
   text: string;
   warning?: string;
   at: string;
+  /** ai = tailored by the AI; own = ready-made text the owner edited */
+  source?: "ai" | "own";
 }
 
 export interface Entry {

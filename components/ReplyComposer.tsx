@@ -3,12 +3,15 @@
 import { useState } from "react";
 import CopyButton from "./CopyButton";
 import { useApp, type Entry } from "./AppProvider";
+import { templateReply } from "@/lib/reply-templates";
 import { contactText } from "@/lib/settings";
 import type { CheckResult, ReplyApproach, ReplyLanguage, ReplyResponse, ReplyStyle, ReviewItem } from "@/lib/types";
+import { riskLevel } from "@/lib/risk";
 
-const APPROACHES: { value: ReplyApproach; label: string; hint: string }[] = [
-  { value: "apology", label: "Apologise and fix", hint: "For a genuine complaint" },
-  { value: "factual", label: "Polite and factual", hint: "When we can't verify the visit" },
+export const APPROACHES: { value: ReplyApproach; label: string; hint: string }[] = [
+  { value: "apology", label: "Apologise and fix", hint: "A fair complaint" },
+  { value: "contact", label: "Ask them to contact us", hint: "We can't confirm it" },
+  { value: "factual", label: "Polite and factual", hint: "We found no such visit" },
 ];
 
 const LANGUAGES: { value: ReplyLanguage; label: string }[] = [
@@ -23,9 +26,11 @@ const STYLES: { value: ReplyStyle; label: string }[] = [
   { value: "short", label: "Short" },
 ];
 
-/** Genuine-looking complaints get an apology; anything we can't stand behind gets a factual reply. */
-export const defaultApproach = (result: CheckResult): ReplyApproach =>
-  result.verdict === "Verified" || result.verdict === "Plausible" ? "apology" : "factual";
+/** Low risk: apologise. Medium: invite them to get in touch. High: stay polite and factual. */
+export const defaultApproach = (result: CheckResult): ReplyApproach => {
+  const risk = riskLevel(result);
+  return risk === "low" ? "apology" : risk === "medium" ? "contact" : "factual";
+};
 
 const keyFor = (approach: ReplyApproach, language: ReplyLanguage, style: ReplyStyle) => `${approach}|${language}|${style}`;
 
@@ -66,19 +71,34 @@ function Segmented<T extends string>({
   );
 }
 
-export default function ReplyComposer({ review, entry, result }: { review: ReviewItem; entry: Entry; result: CheckResult }) {
-  const { acquireAi, setReply, setStatus, settings, toast } = useApp();
-  const [approach, setApproach] = useState<ReplyApproach>(() => defaultApproach(result));
+export default function ReplyComposer({
+  review,
+  entry,
+  result,
+  approach,
+  onApproachChange,
+}: {
+  review: ReviewItem;
+  entry: Entry;
+  result: CheckResult;
+  approach: ReplyApproach;
+  onApproachChange: (a: ReplyApproach) => void;
+}) {
+  const { acquireAi, setReply, settings, toast } = useApp();
   const [language, setLanguage] = useState<ReplyLanguage>("en");
   const [style, setStyle] = useState<ReplyStyle>("warm");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const contact = contactText(settings);
   const key = keyFor(approach, language, style);
-  const draft = entry.replies?.[key];
-  const hasPlaceholder = !!draft && /\[[^\]]+\]/.test(draft.text);
+  const saved = entry.replies?.[key];
+  // A ready-made reply is always available, with no AI call. Saved or AI-tailored text replaces it.
+  const text = saved?.text ?? templateReply({ approach, language, style, contact });
+  const source = saved?.source === "ai" ? "ai" : saved ? "own" : "template";
+  const hasPlaceholder = /\[[^\]]+\]/.test(text);
 
-  async function generate() {
+  async function tailor() {
     setLoading(true);
     setError(null);
     try {
@@ -93,12 +113,14 @@ export default function ReplyComposer({ review, entry, result }: { review: Revie
           approach,
           language,
           style,
-          contact: contactText(settings),
+          contact,
         }),
       });
       const data = (await r.json()) as ReplyResponse;
-      if (data.ok) setReply(review.id, key, { text: data.reply, warning: data.warning, at: new Date().toISOString() });
-      else setError(data.error);
+      if (data.ok) {
+        setReply(review.id, key, { text: data.reply, warning: data.warning, at: new Date().toISOString(), source: "ai" });
+        toast("Tailored reply ready", "success");
+      } else setError(data.error);
     } catch {
       setError("The connection failed. Try again.");
     }
@@ -106,10 +128,10 @@ export default function ReplyComposer({ review, entry, result }: { review: Revie
   }
 
   return (
-    <section className="panel fade-in">
-      <h2>Reply draft</h2>
+    <div className="composer" id={`composer-${review.id}`}>
+      <h3 className="composer-title">Your reply</h3>
 
-      <div className="tone-switch" role="radiogroup" aria-label="Reply approach">
+      <div className="tone-switch three" role="radiogroup" aria-label="Reply approach">
         {APPROACHES.map((t) => (
           <button
             key={t.value}
@@ -119,7 +141,7 @@ export default function ReplyComposer({ review, entry, result }: { review: Revie
             className="tone-option"
             disabled={loading}
             onClick={() => {
-              setApproach(t.value);
+              onApproachChange(t.value);
               setError(null);
             }}
           >
@@ -142,56 +164,36 @@ export default function ReplyComposer({ review, entry, result }: { review: Revie
         </div>
       ) : (
         <>
-          {error && <p className="notice notice-error">Couldn&apos;t draft a reply. {error}</p>}
-          {draft ? (
-            <>
-              {draft.warning && <p className="notice notice-warning">{draft.warning}</p>}
-              {hasPlaceholder && (
-                <p className="notice notice-warning">
-                  {settings && (settings.phone || settings.email)
-                    ? "Replace the text in [square brackets] before posting."
-                    : "Add your phone or email in My Restaurant, or replace the text in [square brackets] before posting."}
-                </p>
-              )}
-              <label className="sr-only" htmlFor={`reply-${review.id}`}>
-                Reply draft
-              </label>
-              <textarea
-                id={`reply-${review.id}`}
-                lang={language === "hi" ? "hi" : "en"}
-                value={draft.text}
-                rows={6}
-                onChange={(e) => setReply(review.id, key, { ...draft, text: e.target.value })}
-              />
-            </>
-          ) : (
-            !error && (
-              <p className="muted">
-                No reply drafted yet for this choice. Drafting uses one AI call, and each draft is saved so you only pay for it once.
-              </p>
-            )
+          {error && <p className="notice notice-error">Couldn&apos;t tailor the reply. {error}</p>}
+          {saved?.warning && <p className="notice notice-warning">{saved.warning}</p>}
+          {hasPlaceholder && (
+            <p className="notice notice-warning">
+              {settings && (settings.phone || settings.email)
+                ? "Replace the text in [square brackets] before posting."
+                : "Add your phone or email in My Restaurant, or replace the text in [square brackets] before posting."}
+            </p>
           )}
+          <label className="sr-only" htmlFor={`reply-${review.id}`}>
+            Reply draft
+          </label>
+          <textarea
+            id={`reply-${review.id}`}
+            lang={language === "hi" ? "hi" : "en"}
+            value={text}
+            rows={5}
+            onChange={(e) => setReply(review.id, key, { text: e.target.value, at: new Date().toISOString(), source: "own" })}
+          />
+          <p className="draft-source muted small">
+            {source === "ai" ? "Tailored to this review by the AI." : source === "own" ? "Your edited draft." : "Ready-made draft. No AI used."}
+          </p>
           <div className="actions">
-            <button type="button" className="btn btn-solid" onClick={generate}>
-              {draft ? "Redraft" : "Draft reply"}
+            <CopyButton text={text} label="Copy reply" />
+            <button type="button" className="btn" onClick={tailor}>
+              {source === "ai" ? "Tailor again with AI" : "Tailor to this review with AI"}
             </button>
-            {draft && <CopyButton text={draft.text} />}
-            {draft && (
-              <button
-                type="button"
-                className="btn"
-                disabled={entry.status === "replied"}
-                onClick={() => {
-                  setStatus(review.id, "replied");
-                  toast("Marked as replied", "success");
-                }}
-              >
-                {entry.status === "replied" ? "Marked as replied" : "Mark as replied"}
-              </button>
-            )}
           </div>
         </>
       )}
-    </section>
+    </div>
   );
 }

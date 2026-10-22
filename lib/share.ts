@@ -1,3 +1,4 @@
+import { plainSummary, riskLevel } from "./risk";
 import type { CheckResult, ReviewItem } from "./types";
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -10,13 +11,16 @@ export function buildManagerMessage(opts: {
   suggestedReply?: string;
 }): string {
   const { restaurant, review, result, suggestedReply } = opts;
+  const risk = riskLevel(result);
+  const heading =
+    risk === "high" ? "possible fake review, please take a look" : risk === "medium" ? "review to look into" : "guest complaint to follow up";
   const lines = [
-    `*${restaurant || "Restaurant"}: guest complaint to follow up*`,
+    `*${restaurant || "Restaurant"}: ${heading}*`,
     `${review.rating}/5 on Google, ${day(review.date)} (${review.author})`,
     `"${review.text}"`,
     "",
-    `Checked with DineTrust: ${result.verdict} (${result.confidence}%).`,
-    result.summary,
+    `Checked with DineTrust: ${risk} risk${typeof result.score === "number" ? ` (score ${result.score}/100)` : ""}.`,
+    plainSummary(result),
   ];
   if (suggestedReply?.trim()) lines.push("", "Suggested public reply:", suggestedReply.trim());
   return lines.join("\n");

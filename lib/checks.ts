@@ -2,7 +2,7 @@ import { toMinutes, type Order, type Records, type ServiceWindow } from "./recor
 import { describeDay } from "./settings";
 import { isLowDetail } from "./patterns";
 import type { Similar } from "./similarity";
-import type { AiReading, Check, CheckKind, Claim, Factor, Review, Verdict } from "./types";
+import type { AiReading, Check, CheckKind, Claim, Factor, FactorIcon, Review, Verdict, Visit } from "./types";
 
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 const WINDOW_MINUTES = 90;
@@ -77,10 +77,19 @@ function nearOrders(orders: Order[], date: string, time: number | null, party: n
   );
 }
 
+const hhmm = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+
+/** "a party of 10 on Fri 16 Oct around 20:00" */
 function describeVisit(date: string, claim: Claim): string {
+  const who = claim.party_size !== null ? `a party of ${claim.party_size} on ` : "";
   const when = claim.time ? ` around ${claim.time}` : "";
-  const who = claim.party_size !== null ? ` for ${claim.party_size}` : "";
-  return `${pretty(date)}${when}${who}`;
+  return `${who}${pretty(date)}${when}`;
+}
+
+/** The record closest in time to the claimed time. */
+function closest<T extends { minutes: number }>(rows: T[], time: number | null): T {
+  if (time === null) return rows[0];
+  return [...rows].sort((a, b) => Math.abs(a.minutes - time) - Math.abs(b.minutes - time))[0];
 }
 
 /** Singular-ise so "appetizers" finds "(appetizer)" and "steaks" finds "steak". */
@@ -93,11 +102,15 @@ function itemMatches(orderItems: string, wanted: string): boolean {
 
 /** Look one claim up in the records. One row per claim. */
 export function checkClaim(claim: Claim, reviewDate: Date, records: Records): Check {
-  const row = (status: Check["status"], record: string, kind?: CheckKind): Check => ({ claim: claim.text, record, status, kind });
   const date = resolveDate(claim, reviewDate);
-
   const impossible = impossibleReason(claim, date, records);
-  if (impossible) return row("mismatch", impossible.reason, impossible.kind);
+  if (impossible) return { claim: claim.text, record: impossible.reason, status: "mismatch", kind: impossible.kind };
+  return lookupClaim(claim, date, records);
+}
+
+/** Look the claim up in the bills and reservations (after the "is it even possible" checks). */
+function lookupClaim(claim: Claim, date: string | null, records: Records): Check {
+  const row = (status: Check["status"], record: string, kind?: CheckKind): Check => ({ claim: claim.text, record, status, kind });
 
   if (claim.type === "wait_time" || claim.type === "other") {
     return row("no_record", "Waiting times and opinions aren't recorded.");
@@ -115,45 +128,55 @@ export function checkClaim(claim: Claim, reviewDate: Date, records: Records): Ch
       const w = windowAt(windows, time);
       return row(
         "match",
-        `${pretty(date)}: ${claim.time} is within opening hours${w ? ` (${w.name} ${w.open}–${w.close})` : ""}.`,
+        `Open ${pretty(date)}${w ? `, ${w.name} ${w.open}–${w.close}` : ""}. The claimed time (${claim.time}) fits.`,
         "hours_ok",
       );
     }
     case "reservation": {
       if (dayRes.length === 0) return row("no_record", `No reservations on file for ${pretty(date)}.`);
-      const found = dayRes.some(
+      const fits = dayRes.filter(
         (r) =>
           (time === null || Math.abs(r.minutes - time) <= 60) &&
           (claim.party_size === null || r.partySize === claim.party_size),
       );
-      return found
-        ? row("match", `Reservation found: ${describeVisit(date, claim)}.`, "reservation_found")
-        : row("mismatch", `No reservation found for ${describeVisit(date, claim)}.`, "no_reservation");
+      if (fits.length > 0) {
+        const r = closest(fits, time);
+        return row(
+          "match",
+          `Reservation${r.ref ? ` ${r.ref}` : ""} · ${pretty(date)} at ${hhmm(r.minutes)} · party of ${r.partySize}.`,
+          "reservation_found",
+        );
+      }
+      return row("mismatch", `No reservation found for ${describeVisit(date, claim)}.`, "no_reservation");
     }
     case "party_size":
     case "bill": {
-      if (dayOrders.length === 0) return row("no_record", `No orders on file for ${pretty(date)}.`);
+      if (dayOrders.length === 0) return row("no_record", `No bills on file for ${pretty(date)}.`);
       if (claim.type === "party_size" && claim.party_size === null) {
         return row("no_record", `${pretty(date)}: no party size to check.`);
       }
       const found = nearOrders(records.orders, date, time, claim.party_size);
       if (found.length > 0) {
-        const kind = claim.type === "bill" ? "Bill found" : "Order found";
-        return row("match", `${kind}: ${describeVisit(date, claim)}.`, "order_found");
+        const o = closest(found, time);
+        return row(
+          "match",
+          `Bill${o.billId ? ` ${o.billId}` : ""} · ${pretty(date)} at ${hhmm(o.minutes)} · party of ${o.partySize}.`,
+          "order_found",
+        );
       }
-      const what = claim.type === "bill" ? "bill" : "order";
-      return row("mismatch", `No ${what} found for ${describeVisit(date, claim)}.`, "no_bill");
+      return row("mismatch", `No bill found for ${describeVisit(date, claim)}.`, "no_bill");
     }
     case "item_ordered": {
       if (!claim.item) return row("no_record", "No dish named to check.");
-      if (dayOrders.length === 0) return row("no_record", `No orders on file for ${pretty(date)}.`);
+      if (dayOrders.length === 0) return row("no_record", `No bills on file for ${pretty(date)}.`);
       const visit = nearOrders(records.orders, date, time, claim.party_size);
       if (visit.length === 0) {
         return row("no_record", `${pretty(date)}: couldn't pin down the visit to check the dish.`);
       }
-      return visit.some((o) => itemMatches(o.items, claim.item!))
-        ? row("match", `${pretty(date)}: "${claim.item}" is on the matching order.`, "dish_found")
-        : row("mismatch", `${pretty(date)}: "${claim.item}" is not on the matching order.`, "no_dish");
+      const withDish = visit.find((o) => itemMatches(o.items, claim.item!));
+      return withDish
+        ? row("match", `"${claim.item}" is on bill${withDish.billId ? ` ${withDish.billId}` : ""} (${pretty(date)}).`, "dish_found")
+        : row("mismatch", `"${claim.item}" is not on the matching bill${visit[0]?.billId ? ` (${visit[0].billId})` : ""}.`, "no_dish");
     }
   }
 }
@@ -211,9 +234,35 @@ function tableCheck(claim: Claim, reviewDate: Date, row: Check, records: Records
   };
 }
 
+/** How busy the restaurant was on the day the review says it visited (needs bills for that day). */
+export function visitInfo(claims: Claim[], reviewDate: Date, records: Records): Visit | null {
+  let date: string | null = null;
+  for (const c of withVisitContext(claims)) {
+    date = resolveDate(c, reviewDate);
+    if (date) break;
+  }
+  if (!date) return null;
+  const perDay = new Map<string, { bills: number; covers: number }>();
+  for (const o of records.orders) {
+    const d = perDay.get(o.date) ?? { bills: 0, covers: 0 };
+    d.bills++;
+    d.covers += o.partySize;
+    perDay.set(o.date, d);
+  }
+  const day = perDay.get(date);
+  if (!day) return null;
+  const rank = 1 + [...perDay.values()].filter((d) => d.covers > day.covers).length;
+  return { date, label: pretty(date), bills: day.bills, covers: day.covers, rank, daysOnFile: perDay.size };
+}
+
 export function buildChecks(claims: Claim[], reviewDate: Date, records: Records): Check[] {
   return withVisitContext(claims).flatMap((c) => {
     const row = checkClaim(c, reviewDate, records);
+    // A party too big for any table also can't be in the bills. Say so as well: it is separate evidence.
+    if (row.kind === "impossible_capacity") {
+      const lookup = lookupClaim(c, resolveDate(c, reviewDate), records);
+      return lookup.kind === "no_bill" || lookup.kind === "no_reservation" ? [row, lookup] : [row];
+    }
     const tables = tableCheck(c, reviewDate, row, records);
     return tables ? [row, tables] : [row];
   });
@@ -238,19 +287,19 @@ const clamp = (n: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, Math.ro
 const SUSPICION_LINE = 40; // from this score up, a review is called Suspicious
 
 /** Weights for each kind of evidence. Positive adds suspicion, negative adds trust. */
-const RISK_POINTS: Partial<Record<CheckKind, { points: number; label: string }>> = {
-  impossible_capacity: { points: 40, label: "Party size is bigger than your largest table" },
-  impossible_closed: { points: 40, label: "Visit claimed on a day you are closed" },
-  impossible_hours: { points: 40, label: "Visit claimed outside your service hours" },
-  no_bill: { points: 25, label: "No matching bill found" },
-  no_reservation: { points: 25, label: "No matching reservation found" },
-  no_dish: { points: 15, label: "A dish named is not on the matching bill" },
-  no_free_tables: { points: 20, label: "Not enough free tables at that time for that party" },
+const RISK_POINTS: Partial<Record<CheckKind, { points: number; label: string; icon: FactorIcon }>> = {
+  impossible_capacity: { points: 40, label: "Party size is bigger than your largest table", icon: "capacity" },
+  impossible_closed: { points: 40, label: "Visit claimed on a day you are closed", icon: "closed" },
+  impossible_hours: { points: 40, label: "Visit claimed outside your service hours", icon: "hours" },
+  no_bill: { points: 25, label: "No matching bill found", icon: "bill" },
+  no_reservation: { points: 25, label: "No matching reservation found", icon: "reservation" },
+  no_dish: { points: 15, label: "A dish named is not on the matching bill", icon: "dish" },
+  no_free_tables: { points: 20, label: "Not enough free tables at that time for that party", icon: "tables" },
 };
-const TRUST_POINTS: Partial<Record<CheckKind, { points: number; label: string }>> = {
-  order_found: { points: -20, label: "A matching bill was found for the party size and time" },
-  reservation_found: { points: -15, label: "A matching reservation was found" },
-  dish_found: { points: -10, label: "A dish named is on the matching bill" },
+const TRUST_POINTS: Partial<Record<CheckKind, { points: number; label: string; icon: FactorIcon }>> = {
+  order_found: { points: -20, label: "A matching bill was found for the party size and time", icon: "trust" },
+  reservation_found: { points: -15, label: "A matching reservation was found", icon: "trust" },
+  dish_found: { points: -10, label: "A dish named is on the matching bill", icon: "trust" },
 };
 const MAX_TRUST = -35;
 
@@ -275,12 +324,16 @@ export function scoreReview({ ai, checks, burst, text, similar }: Signals): { sc
       breakdown.push(rule);
     }
   }
-  if (burst) breakdown.push({ label: "Posted during a burst of one-star reviews", points: 15 });
+  if (burst) breakdown.push({ label: "Posted during a burst of one-star reviews", points: 15, icon: "burst" });
   if (similar) {
-    breakdown.push({ label: `Wording is ${Math.round(similar.score * 100)}% like ${similar.author}'s review`, points: 20 });
+    breakdown.push({
+      label: `Wording is ${Math.round(similar.score * 100)}% like ${similar.author}'s review`,
+      points: 20,
+      icon: "similar",
+    });
   }
-  if (ai.verdict === "Suspicious") breakdown.push({ label: "The wording itself reads as vague or exaggerated", points: 25 });
-  if (isLowDetail(text)) breakdown.push({ label: "Strong feeling but no details to check", points: 10 });
+  if (ai.verdict === "Suspicious") breakdown.push({ label: "The wording itself reads as vague or exaggerated", points: 25, icon: "wording" });
+  if (isLowDetail(text)) breakdown.push({ label: "Strong feeling but no details to check", points: 10, icon: "detail" });
 
   // Trust only counts when nothing in the review is impossible: an impossible claim can't be offset.
   const impossible = checks.some((c) => c.kind && IMPOSSIBLE.includes(c.kind));

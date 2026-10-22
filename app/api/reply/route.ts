@@ -46,7 +46,8 @@ export async function POST(request: Request) {
   }
   const checked = validateReviewInput(body.review);
   if ("error" in checked) return reply({ ok: false, error: checked.error, code: "bad_input" }, 400);
-  const approach: ReplyApproach = (body.approach ?? body.tone) === "factual" ? "factual" : "apology";
+  const wanted = body.approach ?? body.tone;
+  const approach: ReplyApproach = wanted === "factual" ? "factual" : wanted === "contact" ? "contact" : "apology";
   const language: ReplyLanguage = body.language === "hi" || body.language === "hinglish" ? body.language : "en";
   const style: ReplyStyle = body.style === "professional" || body.style === "short" ? body.style : "warm";
   // Only the claim and its status go to the AI: record details (dates, party sizes, dishes) stay private.
