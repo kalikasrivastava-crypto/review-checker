@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useApp } from "./AppProvider";
 
 export default function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+  const { toast } = useApp();
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -10,8 +12,10 @@ export default function CopyButton({ text, label = "Copy" }: { text: string; lab
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      toast("Copied to clipboard", "success");
     } catch {
       setCopied(false);
+      toast("Couldn't copy. Select the text and copy it yourself.", "error");
     }
   }
 

@@ -3,7 +3,15 @@
 import { useState } from "react";
 import CopyButton from "./CopyButton";
 
-export default function RemovalReport({ initial }: { initial: string }) {
+export default function RemovalReport({
+  initial,
+  reported,
+  onMarkReported,
+}: {
+  initial: string;
+  reported?: boolean;
+  onMarkReported?: () => void;
+}) {
   const [text, setText] = useState(initial);
 
   return (
@@ -19,6 +27,11 @@ export default function RemovalReport({ initial }: { initial: string }) {
       <textarea id="removal-report" value={text} rows={9} onChange={(e) => setText(e.target.value)} />
       <div className="actions">
         <CopyButton text={text} label="Copy report" />
+        {onMarkReported && (
+          <button type="button" className="btn" onClick={onMarkReported} disabled={reported}>
+            {reported ? "Marked as reported" : "Mark as reported"}
+          </button>
+        )}
       </div>
     </section>
   );

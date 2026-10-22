@@ -1137,3 +1137,193 @@ textarea {
 .toast-error {
   border-left: 5px solid var(--suspicious);
 }
+
+/* ---------- inbox ---------- */
+.inbox {
+  display: grid;
+  grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .inbox {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .inbox.has-detail .inbox-list {
+    display: none;
+  }
+  .inbox:not(.has-detail) .inbox-detail {
+    display: none;
+  }
+}
+
+@media (min-width: 861px) {
+  .back-button {
+    display: none;
+  }
+  .inbox-list {
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+}
+
+.add-review summary {
+  cursor: pointer;
+  font-family: var(--font-serif-stack);
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.add-review[open] summary {
+  margin-bottom: 12px;
+}
+
+.add-form {
+  display: grid;
+  gap: 12px;
+}
+
+.add-form .form-row {
+  margin: 0;
+}
+
+.filters {
+  padding: 14px;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.filter-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 0.9rem;
+}
+
+.check-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.inbox-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.inbox-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.inbox-row.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.inbox-row input[type="checkbox"] {
+  margin-top: 10px;
+}
+
+.row-button {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.row-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.row-body .tags {
+  margin-top: 6px;
+}
+
+.detail {
+  display: grid;
+  gap: 0;
+}
+
+.back-button {
+  justify-self: start;
+  margin-bottom: 12px;
+}
+
+.detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.review-full {
+  margin: 12px 0 14px;
+  padding: 0 0 0 14px;
+  border-left: 4px solid var(--line);
+  font-family: var(--font-serif-stack);
+  font-size: 1.08rem;
+  line-height: 1.55;
+}
+
+.inline-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.inline-field select {
+  width: auto;
+  padding: 7px 10px;
+}
+
+.empty h3 {
+  margin: 0 0 4px;
+  color: var(--ink);
+}

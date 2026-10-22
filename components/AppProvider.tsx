@@ -10,6 +10,12 @@ import type { CheckResponse, CheckResult, ReviewItem } from "@/lib/types";
 
 export type Status = "new" | "checked" | "replied" | "reported";
 
+export interface ReplyDraft {
+  text: string;
+  warning?: string;
+  at: string;
+}
+
 export interface Entry {
   status: Status;
   result?: CheckResult;
@@ -18,6 +24,7 @@ export interface Entry {
   note?: string; // e.g. "Doesn't look like a review"
   repliedAt?: string;
   reportedAt?: string;
+  replies?: Record<string, ReplyDraft>; // saved reply drafts, by language/tone/approach
 }
 
 export interface QueueView {
@@ -45,6 +52,7 @@ interface AppValue {
   entryOf: (id: string) => Entry;
   isStale: (id: string) => boolean;
   setStatus: (id: string, status: Status) => void;
+  setReply: (id: string, key: string, draft: ReplyDraft) => void;
   addReview: (r: { text: string; rating: number; date: string; author?: string }) => string;
   check: (ids: string[], opts?: { force?: boolean }) => number;
   cancelQueue: () => void;
@@ -164,6 +172,16 @@ export default function AppProvider({ children }: { children: React.ReactNode })
       });
     },
     [patchEntry],
+  );
+
+  const setReply = useCallback(
+    (id: string, key: string, draft: ReplyDraft) => {
+      setEntries((prev) => {
+        const old = prev[id] ?? NEW_ENTRY;
+        return { ...prev, [id]: { ...old, replies: { ...(old.replies ?? {}), [key]: draft } } };
+      });
+    },
+    [setEntries],
   );
 
   const addReview = useCallback(
@@ -384,6 +402,7 @@ export default function AppProvider({ children }: { children: React.ReactNode })
     entryOf,
     isStale,
     setStatus,
+    setReply,
     addReview,
     check,
     cancelQueue,

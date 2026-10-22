@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import CheckerView from "@/components/CheckerView";
+import Inbox from "@/components/Inbox";
 import Dashboard from "@/components/Dashboard";
 import InsightsPanel from "@/components/InsightsPanel";
 import QueueBar from "@/components/QueueBar";
@@ -9,10 +9,10 @@ import RecordsPanel from "@/components/RecordsPanel";
 import { useApp } from "@/components/AppProvider";
 
 const DEMO_COUNTS = { bills: 25, reservations: 10 };
-type Tab = "dashboard" | "checker" | "insights" | "records";
+type Tab = "dashboard" | "inbox" | "insights" | "records";
 const TABS: { id: Tab; label: string }[] = [
   { id: "dashboard", label: "Dashboard" },
-  { id: "checker", label: "Checker" },
+  { id: "inbox", label: "Inbox" },
   { id: "insights", label: "Insights" },
   { id: "records", label: "Records" },
 ];
@@ -20,7 +20,7 @@ const TABS: { id: Tab; label: string }[] = [
 export default function Home() {
   const { customRecords, setCustomRecords } = useApp();
   const [tab, setTab] = useState<Tab>("dashboard");
-  const [focus, setFocus] = useState<{ id: string; n: number } | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   return (
     <div className="shell">
@@ -53,15 +53,15 @@ export default function Home() {
         <div role="tabpanel" id="panel-dashboard" aria-labelledby="tab-dashboard">
           <Dashboard
             onOpen={(id) => {
-              setFocus((f) => ({ id, n: (f?.n ?? 0) + 1 }));
-              setTab("checker");
+              setSelectedId(id);
+              setTab("inbox");
             }}
           />
         </div>
       )}
 
-      <div hidden={tab !== "checker"} role="tabpanel" id="panel-checker" aria-labelledby="tab-checker">
-        <CheckerView focusId={focus} />
+      <div hidden={tab !== "inbox"} role="tabpanel" id="panel-inbox" aria-labelledby="tab-inbox">
+        <Inbox selectedId={selectedId} onSelect={setSelectedId} />
       </div>
 
       {tab === "insights" && (
