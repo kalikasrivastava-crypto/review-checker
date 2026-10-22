@@ -24,6 +24,8 @@ export interface ServiceWindow {
 export interface Hours {
   maxPartySize: number;
   tables: number;
+  seatsPerTable: number; // typical seats at one table, to work out how many tables a party needs
+  mealMinutes: number; // how long a party typically keeps its table
   days: Record<string, ServiceWindow[]>; // an empty list means closed that day
 }
 

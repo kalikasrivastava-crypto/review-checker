@@ -8,10 +8,10 @@ A daily tool for restaurant owners to tell fair bad Google reviews from suspicio
 |---|---|
 | **Dashboard** (home) | Average rating, reviews this week, % suspicious and reviews waiting for a reply. A rating trend line, a suspicious-vs-genuine chart and a "Needs attention" list of new 1–2 star reviews with a one-click Check. |
 | **Inbox** | Every review with a status (New → Checked → Replied → Reported), filters (status, stars, verdict, date), search, and a bulk **Check selected** queue with a progress bar. Add reviews by pasting them in. |
-| **Review detail** | Verdict stamp, confidence, a weighted score breakdown ("why this score"), the claim-vs-record list, reply drafts in English, Hindi or Hinglish with Warm, Professional or Short tone, a WhatsApp note for the manager, and for suspicious reviews a copy-ready Google report plus a downloadable PDF. |
+| **Review detail** | Verdict stamp, confidence, a weighted score breakdown ("why this score"), the claim-vs-record list, reply drafts in English, Hindi or Hinglish with Warm, Professional or Short tone, a WhatsApp note for the manager, and for suspicious reviews a copy-ready Google report plus a downloadable PDF (Hindi prints correctly). Reviews you added yourself can be deleted, with a confirm step. |
 | **Insights** | Footfall calendar (how busy each day was, next to the days bad reviews claim visits), complaints grouped by theme, and look-alike reviews. |
 | **Records** | Upload bills and reservations as CSV with a column-mapping step, or use the demo data. Sample CSVs to download. |
-| **My Restaurant** | Name, contact details, opening hours per day with lunch and dinner times, number of tables and the largest party you can seat. Every check uses these. A first-time setup walks you through it, with a "demo restaurant" shortcut. |
+| **My Restaurant** | Name, contact details, opening hours per day with lunch and dinner times, number of tables, seats per table, how long a party keeps a table, and the largest party you can seat. Every check uses these, including whether enough tables were free at the time a review says it visited. A first-time setup walks you through it, with a "demo restaurant" shortcut. |
 | **About** (`/about`) | A short page on the problem, how it works and privacy, with a "Try the demo" button. |
 
 Everything you do is saved in your browser, so a refresh keeps your statuses, checks, drafts, records and settings.
@@ -101,7 +101,7 @@ The app is built for Gemini's free plan, which allows only a few AI calls a minu
 - **Free-tier Gemini keys are rate-limited** and sometimes slow or overloaded. The app queues and retries, but a big batch takes minutes (about 12 seconds per review at best). A paid key removes this.
 - A "mismatch" means no matching bill or reservation was found in the records you gave it. A large group split across several bills could look like a false mismatch.
 - Theme counts, the "genuine complaints" screen and the footfall calendar use keywords and simple date reading, not the AI, so treat them as a guide.
-- The PDF report uses plain Latin letters: Hindi or other scripts in a review show as "?".
+- In the PDF report, Hindi and other non-Latin lines are drawn as images (so the joined letters print correctly) and can't be selected or searched as text. Latin text stays real text.
 - Closing after midnight is not supported yet: enter 23:59 for a late close.
 - All demo data is made up. The sample bills cover 13–18 October 2026.
 

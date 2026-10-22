@@ -1,4 +1,4 @@
-import { PdfDoc } from "./pdf";
+import { PdfDoc, type Rasterizer } from "./pdf";
 import type { CheckResult, ReviewItem } from "./types";
 
 const STATUS_LABEL = { match: "Match", mismatch: "Mismatch", no_record: "No record" } as const;
@@ -19,9 +19,11 @@ export function buildEvidencePdf(opts: {
   review: ReviewItem;
   result: CheckResult;
   generatedOn: Date;
+  /** Draws Hindi and other non-Latin text. Without it, those letters print as "?". */
+  raster?: Rasterizer | null;
 }): Uint8Array {
   const { restaurant, review, result, generatedOn } = opts;
-  const doc = new PdfDoc();
+  const doc = new PdfDoc(opts.raster ?? null);
   const muted: [number, number, number] = [0.42, 0.34, 0.26];
 
   doc.text("Evidence report", { size: 22, font: "bold" });

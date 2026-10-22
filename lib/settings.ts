@@ -21,9 +21,16 @@ export interface RestaurantSettings {
   phone: string;
   email: string;
   tables: number;
+  /** Typical seats at one table. A party of 9 at 4 seats a table needs 3 tables. */
+  seatsPerTable: number;
+  /** How long a party typically keeps its table, in minutes. */
+  mealMinutes: number;
   maxPartySize: number;
   days: Record<Weekday, DaySettings>;
 }
+
+export const DEFAULT_SEATS_PER_TABLE = 4;
+export const DEFAULT_MEAL_MINUTES = 90;
 
 const dinner = (start: string, end: string): DaySettings => ({
   open: true,
@@ -36,6 +43,8 @@ export const DEMO_SETTINGS: RestaurantSettings = {
   phone: "+91 98765 43210",
   email: "hello@trattoriademo.example",
   tables: 12,
+  seatsPerTable: DEFAULT_SEATS_PER_TABLE,
+  mealMinutes: DEFAULT_MEAL_MINUTES,
   maxPartySize: 8,
   days: {
     monday: { ...dinner("17:00", "22:00"), open: false },
@@ -54,6 +63,8 @@ export const BLANK_SETTINGS: RestaurantSettings = {
   phone: "",
   email: "",
   tables: 10,
+  seatsPerTable: DEFAULT_SEATS_PER_TABLE,
+  mealMinutes: DEFAULT_MEAL_MINUTES,
   maxPartySize: 8,
   days: Object.fromEntries(
     WEEKDAYS.map((d) => [
@@ -84,7 +95,13 @@ export function toHours(s: RestaurantSettings): Hours {
     }
     days[d] = windows;
   }
-  return { maxPartySize: s.maxPartySize, tables: s.tables, days };
+  return {
+    maxPartySize: s.maxPartySize,
+    tables: s.tables,
+    seatsPerTable: s.seatsPerTable || DEFAULT_SEATS_PER_TABLE,
+    mealMinutes: s.mealMinutes || DEFAULT_MEAL_MINUTES,
+    days,
+  };
 }
 
 export type Section = "basics" | "hours" | "capacity";
@@ -102,6 +119,12 @@ export function settingsIssues(s: RestaurantSettings): Issue[] {
   if (!Number.isInteger(s.tables) || s.tables < 1 || s.tables > 500) add("capacity", "Number of tables must be between 1 and 500.");
   if (!Number.isInteger(s.maxPartySize) || s.maxPartySize < 1 || s.maxPartySize > 200) {
     add("capacity", "Largest party you can seat must be between 1 and 200.");
+  }
+  if (!Number.isInteger(s.seatsPerTable) || s.seatsPerTable < 1 || s.seatsPerTable > 50) {
+    add("capacity", "Seats per table must be between 1 and 50.");
+  }
+  if (!Number.isInteger(s.mealMinutes) || s.mealMinutes < 15 || s.mealMinutes > 360) {
+    add("capacity", "Time a table is used must be between 15 and 360 minutes.");
   }
   let anyOpen = false;
   for (const d of WEEKDAYS) {
@@ -152,12 +175,16 @@ export function sanitizeSettings(input: unknown): RestaurantSettings | null {
   }
   const tables = Math.round(Number(raw.tables));
   const maxPartySize = Math.round(Number(raw.maxPartySize));
+  const seatsPerTable = Math.round(Number(raw.seatsPerTable));
+  const mealMinutes = Math.round(Number(raw.mealMinutes));
   const out: RestaurantSettings = {
     name: text(raw.name, 80),
     phone: text(raw.phone, 40),
     email: text(raw.email, 80),
     tables: Number.isFinite(tables) ? Math.min(500, Math.max(1, tables)) : 10,
     maxPartySize: Number.isFinite(maxPartySize) ? Math.min(200, Math.max(1, maxPartySize)) : 8,
+    seatsPerTable: Number.isFinite(seatsPerTable) && seatsPerTable >= 1 ? Math.min(50, seatsPerTable) : DEFAULT_SEATS_PER_TABLE,
+    mealMinutes: Number.isFinite(mealMinutes) && mealMinutes >= 15 ? Math.min(360, mealMinutes) : DEFAULT_MEAL_MINUTES,
     days,
   };
   return settingsProblems({ ...out, name: out.name || "x" }).length ? null : out;
@@ -172,4 +199,13 @@ export function contactText(s: RestaurantSettings | null): string {
 /** Short summary of one day's hours, e.g. "Dinner 17:00–22:00". */
 export function describeDay(windows: { name: string; open: string; close: string }[]): string {
   return windows.length ? windows.map((w) => `${w.name} ${w.open}–${w.close}`).join(", ") : "closed";
+}
+
+/** Settings saved before seats-per-table and meal length existed get sensible defaults. */
+export function normalizeSettings(raw: RestaurantSettings): RestaurantSettings {
+  return {
+    ...raw,
+    seatsPerTable: raw.seatsPerTable || DEFAULT_SEATS_PER_TABLE,
+    mealMinutes: raw.mealMinutes || DEFAULT_MEAL_MINUTES,
+  };
 }

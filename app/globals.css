@@ -1755,3 +1755,47 @@ a.btn {
   color: var(--accent);
   font-weight: 600;
 }
+
+/* ---------- delete ---------- */
+.delete-zone {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+
+.btn-danger {
+  background: var(--suspicious);
+  border-color: var(--suspicious);
+  color: #fff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--suspicious);
+  border-color: var(--suspicious);
+  filter: brightness(1.1);
+}
+
+.btn-danger-outline {
+  color: var(--suspicious);
+  border-color: var(--suspicious);
+}
+
+.btn-danger-outline:hover:not(:disabled) {
+  background: var(--suspicious-soft);
+  border-color: var(--suspicious);
+}
+
+/* Hindi text uses Noto Sans Devanagari, with the normal fonts as a fallback. */
+:lang(hi) {
+  font-family: var(--font-devanagari), var(--font-sans-stack);
+}
+
+textarea:lang(hi),
+input:lang(hi) {
+  font-family: var(--font-devanagari), var(--font-sans-stack);
+  line-height: 1.6;
+}
+
+.two-col + .two-col {
+  margin-top: 12px;
+}

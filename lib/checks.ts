@@ -179,8 +179,44 @@ function withVisitContext(claims: Claim[]): Claim[] {
   });
 }
 
+const tablesFor = (party: number, seatsPerTable: number) => Math.ceil(party / Math.max(1, seatsPerTable));
+
+/**
+ * If a claimed party can't be found in the bills or reservations, were there even enough free tables
+ * at that time? Tables in use = every bill that started within the usual meal length before then.
+ * Needs bills for that day: with none on file we can't say the room was full.
+ */
+function tableCheck(claim: Claim, reviewDate: Date, row: Check, records: Records): Check | null {
+  const partyClaim = claim.type === "party_size" || claim.type === "reservation" || claim.type === "bill";
+  if (!partyClaim || claim.party_size === null) return null;
+  if (row.kind !== "no_bill" && row.kind !== "no_reservation") return null;
+  const date = resolveDate(claim, reviewDate);
+  const time = toMinutes(claim.time);
+  if (!date || time === null) return null;
+  const dayOrders = records.orders.filter((o) => o.date === date);
+  if (dayOrders.length === 0) return null;
+
+  const { tables, seatsPerTable, mealMinutes } = records.hours;
+  const inUse = dayOrders
+    .filter((o) => o.minutes <= time && time < o.minutes + mealMinutes)
+    .reduce((sum, o) => sum + tablesFor(o.partySize, seatsPerTable), 0);
+  const free = Math.max(0, tables - inUse);
+  const need = tablesFor(claim.party_size, seatsPerTable);
+  if (need <= free) return null;
+  return {
+    claim: claim.text,
+    status: "mismatch",
+    kind: "no_free_tables",
+    record: `${pretty(date)} around ${claim.time}: ${Math.min(inUse, tables)} of ${tables} tables were in use, leaving ${free}. A party of ${claim.party_size} needs ${need}.`,
+  };
+}
+
 export function buildChecks(claims: Claim[], reviewDate: Date, records: Records): Check[] {
-  return withVisitContext(claims).map((c) => checkClaim(c, reviewDate, records));
+  return withVisitContext(claims).flatMap((c) => {
+    const row = checkClaim(c, reviewDate, records);
+    const tables = tableCheck(c, reviewDate, row, records);
+    return tables ? [row, tables] : [row];
+  });
 }
 
 /** True when this one-star review sits in a 24-hour window holding 3 or more one-star reviews. */
@@ -209,6 +245,7 @@ const RISK_POINTS: Partial<Record<CheckKind, { points: number; label: string }>>
   no_bill: { points: 25, label: "No matching bill found" },
   no_reservation: { points: 25, label: "No matching reservation found" },
   no_dish: { points: 15, label: "A dish named is not on the matching bill" },
+  no_free_tables: { points: 20, label: "Not enough free tables at that time for that party" },
 };
 const TRUST_POINTS: Partial<Record<CheckKind, { points: number; label: string }>> = {
   order_found: { points: -20, label: "A matching bill was found for the party size and time" },

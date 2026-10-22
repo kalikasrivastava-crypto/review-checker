@@ -53,6 +53,7 @@ export type CheckKind =
   | "no_bill"
   | "no_reservation"
   | "no_dish"
+  | "no_free_tables"
   | "order_found"
   | "reservation_found"
   | "dish_found"

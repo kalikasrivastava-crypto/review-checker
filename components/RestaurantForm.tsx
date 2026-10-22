@@ -150,8 +150,34 @@ export default function RestaurantForm({ value, onChange, section }: Props) {
               />
             </label>
           </div>
+          <div className="two-col">
+            <label className="field">
+              Typical seats per table
+              <input
+                type="number"
+                min={1}
+                max={50}
+                inputMode="numeric"
+                value={value.seatsPerTable || ""}
+                onChange={(e) => set("seatsPerTable", numberValue(e.target.value))}
+              />
+            </label>
+            <label className="field">
+              How long a party keeps a table (minutes)
+              <input
+                type="number"
+                min={15}
+                max={360}
+                inputMode="numeric"
+                value={value.mealMinutes || ""}
+                onChange={(e) => set("mealMinutes", numberValue(e.target.value))}
+              />
+            </label>
+          </div>
           <p className="muted small">
-            A review that claims a bigger table than this is flagged as impossible. The number of tables shows how busy each day was.
+            A review that claims a bigger party than your largest is flagged as impossible. If a claimed visit has no matching
+            bill and your tables were already full at that time, that counts against it too. A party needs one table for
+            every {value.seatsPerTable || 4} guests, rounded up.
           </p>
         </section>
       )}

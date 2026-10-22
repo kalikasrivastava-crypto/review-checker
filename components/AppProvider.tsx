@@ -6,7 +6,7 @@ import { hashString } from "@/lib/sig";
 import { useHydrated, usePersisted } from "@/lib/store";
 import type { Insights } from "@/lib/insights";
 import type { CustomRecords } from "@/lib/records";
-import type { RestaurantSettings } from "@/lib/settings";
+import { normalizeSettings, type RestaurantSettings } from "@/lib/settings";
 import type { CheckResponse, CheckResult, ReviewItem } from "@/lib/types";
 
 export type Status = "new" | "checked" | "replied" | "reported";
@@ -54,6 +54,8 @@ interface AppValue {
   isStale: (id: string) => boolean;
   setStatus: (id: string, status: Status) => void;
   setReply: (id: string, key: string, draft: ReplyDraft) => void;
+  /** Removes a review the owner added, with its check and drafts. Demo reviews can't be deleted. */
+  deleteReview: (id: string) => void;
   addReview: (r: { text: string; rating: number; date: string; author?: string }) => string;
   check: (ids: string[], opts?: { force?: boolean }) => number;
   cancelQueue: () => void;
@@ -117,7 +119,8 @@ export default function AppProvider({ children }: { children: React.ReactNode })
   const [entries, setEntries] = usePersisted<Record<string, Entry>>("dt-entries-v1", EMPTY_ENTRIES);
   const [customRecords, setCustomRecords] = usePersisted<CustomRecords | null>("review-checker-records-v1", null);
 
-  const [settings, setSettings] = usePersisted<RestaurantSettings | null>("dt-settings-v1", null);
+  const [savedSettings, setSettings] = usePersisted<RestaurantSettings | null>("dt-settings-v1", null);
+  const settings = useMemo(() => (savedSettings ? normalizeSettings(savedSettings) : null), [savedSettings]);
 
   const reviews = useMemo(
     () => [...DEMO_REVIEWS, ...added].sort((a, b) => b.date.localeCompare(a.date)),
@@ -373,6 +376,23 @@ export default function AppProvider({ children }: { children: React.ReactNode })
     syncQueue({ message: "Stopping…" });
   }, [syncQueue]);
 
+  const deleteReview = useCallback(
+    (id: string) => {
+      const w = work.current;
+      if (w.ids.includes(id)) {
+        w.ids = w.ids.filter((x) => x !== id);
+        syncQueue();
+      }
+      setAdded((prev) => prev.filter((r) => r.id !== id));
+      setEntries((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    },
+    [setAdded, setEntries, syncQueue],
+  );
+
   // ---- quick screens, themes and so on, computed by the server from the saved reviews ----
   const [insights, setInsights] = useState<Insights | null>(null);
   const [insightsLoading, setInsightsLoading] = useState(true);
@@ -411,6 +431,7 @@ export default function AppProvider({ children }: { children: React.ReactNode })
     isStale,
     setStatus,
     setReply,
+    deleteReview,
     addReview,
     check,
     cancelQueue,

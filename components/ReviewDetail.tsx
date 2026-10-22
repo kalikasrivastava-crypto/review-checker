@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Stars from "./Stars";
 import ScoreCard from "./ScoreCard";
 import EvidenceTable from "./EvidenceTable";
@@ -10,6 +11,7 @@ import { StatusBadge } from "./Badges";
 import { useApp, type Status } from "./AppProvider";
 import { buildRemovalReport } from "@/lib/report";
 import { buildEvidencePdf } from "@/lib/evidence-pdf";
+import { createRasterizer } from "@/lib/raster";
 
 const STATUSES: { value: Status; label: string }[] = [
   { value: "new", label: "New" },
@@ -22,7 +24,8 @@ const fullDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
 export default function ReviewDetail({ id, onBack }: { id: string; onBack: () => void }) {
-  const { reviews, entryOf, isStale, check, queue, setStatus, settings, toast } = useApp();
+  const { reviews, entryOf, isStale, check, queue, setStatus, settings, deleteReview, toast } = useApp();
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const review = reviews.find((r) => r.id === id);
   if (!review) return null;
 
@@ -33,14 +36,17 @@ export default function ReviewDetail({ id, onBack }: { id: string; onBack: () =>
   const queued = position > 0 || (position === 0 && !checking);
   const busy = checking || queued;
 
-  function downloadPdf() {
+  async function downloadPdf() {
     if (!result || !review) return;
     try {
-      const bytes = buildEvidencePdf({ restaurant: settings?.name ?? "", review, result, generatedOn: new Date() });
+      // Hindi and other non-Latin text is drawn by the browser so it prints correctly.
+      const raster = await createRasterizer();
+      const bytes = buildEvidencePdf({ restaurant: settings?.name ?? "", review, result, generatedOn: new Date(), raster });
       const url = URL.createObjectURL(new Blob([bytes as unknown as BlobPart], { type: "application/pdf" }));
       const link = document.createElement("a");
       link.href = url;
-      link.download = `dinetrust-evidence-${review.author.replace(/[^A-Za-z0-9]+/g, "-").toLowerCase()}-${review.date.slice(0, 10)}.pdf`;
+      const slug = review.author.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "review";
+      link.download = `dinetrust-evidence-${slug}-${review.date.slice(0, 10)}.pdf`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -104,6 +110,38 @@ export default function ReviewDetail({ id, onBack }: { id: string; onBack: () =>
             Your records or this review changed since the last check. Re-check to update the result.
           </p>
         )}
+
+        {review.source === "added" && (
+          <div className="delete-zone">
+            {confirmingDelete ? (
+              <div className="notice notice-error" role="alertdialog" aria-labelledby={`del-${id}`}>
+                <p id={`del-${id}`}>
+                  <strong>Delete this review?</strong> Its check and any reply drafts are deleted too. This can&apos;t be undone.
+                </p>
+                <div className="actions">
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    onClick={() => {
+                      deleteReview(id);
+                      toast("Review deleted", "success");
+                      onBack();
+                    }}
+                  >
+                    Yes, delete it
+                  </button>
+                  <button type="button" className="btn" onClick={() => setConfirmingDelete(false)}>
+                    Keep it
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" className="btn btn-small btn-danger-outline" onClick={() => setConfirmingDelete(true)}>
+                Delete this review
+              </button>
+            )}
+          </div>
+        )}
       </section>
 
       {busy && !result && (
@@ -128,11 +166,11 @@ export default function ReviewDetail({ id, onBack }: { id: string; onBack: () =>
         <>
           <ScoreCard result={result} />
           <EvidenceTable checks={result.checks} />
-          <ReplyComposer key={id} review={review} entry={entry} result={result} />
+          <ReplyComposer key={`reply-${id}`} review={review} entry={entry} result={result} />
           {result.verdict !== "Suspicious" && <ManagerShare key={`share-${id}`} review={review} entry={entry} result={result} />}
           {result.verdict === "Suspicious" && (
             <RemovalReport
-              key={id}
+              key={`report-${id}`}
               initial={buildRemovalReport(review, result)}
               reported={entry.status === "reported"}
               onPdf={downloadPdf}
