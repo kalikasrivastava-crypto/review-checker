@@ -1,11 +1,14 @@
 import { aiErrorMessage, AiError, askAI } from "@/lib/ai";
 import { replySystem, replyUser } from "@/lib/prompts";
 import { validateReviewInput } from "@/lib/validate";
-import type { Check, ReplyResponse, ReplyTone, Review } from "@/lib/types";
+import type { Check, ReplyApproach, ReplyLanguage, ReplyResponse, ReplyStyle, Review } from "@/lib/types";
 
 const MAX_WORDS = 79;
+const SHORT_MAX_WORDS = 40;
 const BANNED =
-  /\b(camera|cameras|footage|records?|database|our system|refund|refunds|compensat\w*|liar|lying|lied|fake|fabricat\w*|fraud\w*)\b/i;
+  /\b(camera|cameras|cctv|footage|records?|database|our system|refund|refunds|compensat\w*|liar|lying|lied|fake|fabricat\w*|fraud\w*|jhooth\w*|jhutha|nakli|dhokha|paise wapas)\b/i;
+// \b does not work with Devanagari, so these are matched on their own.
+const BANNED_HINDI = /(रिफंड|पैसे वापस|धोखा|झूठ|नकली|कैमरा|सीसीटीवी|रिकॉर्ड)/;
 const MONEY = /[$£€₹]\s?\d|\b\d+(\.\d{2})?\s?(usd|gbp|eur|inr|dollars|pounds|euros|rupees)\b/i;
 const BILL_ID = /\bB\d{3,}\b/;
 
@@ -17,10 +20,11 @@ function reply(body: ReplyResponse, status = 200) {
 }
 
 /** Plain-code check of the reply rules. Returns a warning, or undefined if the draft is fine. */
-function ruleWarning(text: string, review: Review): string | undefined {
+function ruleWarning(text: string, review: Review, style: ReplyStyle): string | undefined {
   const words = text.trim().split(/\s+/).length;
+  if (style === "short" && words > SHORT_MAX_WORDS) return `This draft is ${words} words. A short reply should stay under 40.`;
   if (words > MAX_WORDS) return `This draft is ${words} words. Trim it below 80 before posting.`;
-  if (BANNED.test(text)) {
+  if (BANNED.test(text) || BANNED_HINDI.test(text)) {
     return "This draft may mention records, refunds or accuse the reviewer. Edit it before posting.";
   }
   if (MONEY.test(text) || BILL_ID.test(text)) {
@@ -42,7 +46,9 @@ export async function POST(request: Request) {
   }
   const checked = validateReviewInput(body.review);
   if ("error" in checked) return reply({ ok: false, error: checked.error, code: "bad_input" }, 400);
-  const tone: ReplyTone = body.tone === "factual" ? "factual" : "apology";
+  const approach: ReplyApproach = (body.approach ?? body.tone) === "factual" ? "factual" : "apology";
+  const language: ReplyLanguage = body.language === "hi" || body.language === "hinglish" ? body.language : "en";
+  const style: ReplyStyle = body.style === "professional" || body.style === "short" ? body.style : "warm";
   // Only the claim and its status go to the AI: record details (dates, party sizes, dishes) stay private.
   const checks = (Array.isArray(body.checks) ? (body.checks as Check[]) : []).map((c) => ({
     claim: String(c.claim),
@@ -53,9 +59,9 @@ export async function POST(request: Request) {
   const contact = typeof body.contact === "string" ? body.contact.trim().slice(0, 120) : "";
 
   try {
-    let text = await askAI(replySystem(tone), replyUser(checked.review, checks));
+    let text = await askAI(replySystem({ approach, language, style }), replyUser(checked.review, checks));
     if (contact) text = text.replace(/\[phone or email\]/gi, contact);
-    return reply({ ok: true, reply: text, warning: ruleWarning(text, checked.review) });
+    return reply({ ok: true, reply: text, warning: ruleWarning(text, checked.review, style) });
   } catch (err) {
     const code = err instanceof AiError ? err.code : "unavailable";
     return reply({ ok: false, error: aiErrorMessage(code), code }, code === "no_key" ? 503 : 502);

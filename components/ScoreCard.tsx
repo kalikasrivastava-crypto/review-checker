@@ -20,6 +20,30 @@ export default function ScoreCard({ result }: { result: CheckResult }) {
         </div>
       </div>
       <p className="summary">{result.summary}</p>
+
+      <h3 className="factors-title">Why this score</h3>
+      {result.breakdown === undefined ? (
+        <p className="muted small">This result was saved before score breakdowns existed. Re-check it to see one.</p>
+      ) : result.breakdown.length === 0 ? (
+        <p className="muted small">Nothing in this review raised suspicion.</p>
+      ) : (
+        <ul className="factors">
+          {result.breakdown.map((f, i) => (
+            <li key={i}>
+              <span>{f.label}</span>
+              <span className={f.points > 0 ? "pts pts-up" : "pts pts-down"}>
+                {f.points > 0 ? "+" : "−"}
+                {Math.abs(f.points)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {result.score !== undefined && (
+        <p className="factor-total">
+          Suspicion score <strong>{result.score}</strong> / 100. From 40 up, a review is called Suspicious.
+        </p>
+      )}
     </section>
   );
 }

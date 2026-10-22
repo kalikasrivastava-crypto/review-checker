@@ -5,9 +5,11 @@ import ScoreCard from "./ScoreCard";
 import EvidenceTable from "./EvidenceTable";
 import ReplyComposer from "./ReplyComposer";
 import RemovalReport from "./RemovalReport";
+import ManagerShare from "./ManagerShare";
 import { StatusBadge } from "./Badges";
 import { useApp, type Status } from "./AppProvider";
 import { buildRemovalReport } from "@/lib/report";
+import { buildEvidencePdf } from "@/lib/evidence-pdf";
 
 const STATUSES: { value: Status; label: string }[] = [
   { value: "new", label: "New" },
@@ -20,7 +22,7 @@ const fullDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
 export default function ReviewDetail({ id, onBack }: { id: string; onBack: () => void }) {
-  const { reviews, entryOf, isStale, check, queue, setStatus, toast } = useApp();
+  const { reviews, entryOf, isStale, check, queue, setStatus, settings, toast } = useApp();
   const review = reviews.find((r) => r.id === id);
   if (!review) return null;
 
@@ -30,6 +32,24 @@ export default function ReviewDetail({ id, onBack }: { id: string; onBack: () =>
   const checking = queue.active && queue.currentId === id && position === 0;
   const queued = position > 0 || (position === 0 && !checking);
   const busy = checking || queued;
+
+  function downloadPdf() {
+    if (!result || !review) return;
+    try {
+      const bytes = buildEvidencePdf({ restaurant: settings?.name ?? "", review, result, generatedOn: new Date() });
+      const url = URL.createObjectURL(new Blob([bytes as unknown as BlobPart], { type: "application/pdf" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `dinetrust-evidence-${review.author.replace(/[^A-Za-z0-9]+/g, "-").toLowerCase()}-${review.date.slice(0, 10)}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast("PDF report downloaded", "success");
+    } catch {
+      toast("Couldn't create the PDF. Try the copy button instead.", "error");
+    }
+  }
 
   return (
     <div className="detail">
@@ -109,11 +129,13 @@ export default function ReviewDetail({ id, onBack }: { id: string; onBack: () =>
           <ScoreCard result={result} />
           <EvidenceTable checks={result.checks} />
           <ReplyComposer key={id} review={review} entry={entry} result={result} />
+          {result.verdict !== "Suspicious" && <ManagerShare key={`share-${id}`} review={review} entry={entry} result={result} />}
           {result.verdict === "Suspicious" && (
             <RemovalReport
               key={id}
               initial={buildRemovalReport(review, result)}
               reported={entry.status === "reported"}
+              onPdf={downloadPdf}
               onMarkReported={() => {
                 setStatus(id, "reported");
                 toast("Marked as reported", "success");

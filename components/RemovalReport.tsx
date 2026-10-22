@@ -7,10 +7,12 @@ export default function RemovalReport({
   initial,
   reported,
   onMarkReported,
+  onPdf,
 }: {
   initial: string;
   reported?: boolean;
   onMarkReported?: () => void;
+  onPdf?: () => void;
 }) {
   const [text, setText] = useState(initial);
 
@@ -26,6 +28,11 @@ export default function RemovalReport({
       </label>
       <textarea id="removal-report" value={text} rows={9} onChange={(e) => setText(e.target.value)} />
       <div className="actions">
+        {onPdf && (
+          <button type="button" className="btn btn-solid" onClick={onPdf}>
+            Download PDF report
+          </button>
+        )}
         <CopyButton text={text} label="Copy report" />
         {onMarkReported && (
           <button type="button" className="btn" onClick={onMarkReported} disabled={reported}>

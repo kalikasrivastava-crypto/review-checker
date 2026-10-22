@@ -45,16 +45,38 @@ export interface AiReading {
   claims: Claim[];
 }
 
+/** What kind of evidence a check is. Drives the weights in the score breakdown. */
+export type CheckKind =
+  | "impossible_capacity"
+  | "impossible_closed"
+  | "impossible_hours"
+  | "no_bill"
+  | "no_reservation"
+  | "no_dish"
+  | "order_found"
+  | "reservation_found"
+  | "dish_found"
+  | "hours_ok";
+
 export interface Check {
   claim: string;
   record: string;
   status: Status;
+  kind?: CheckKind;
+}
+
+/** One line of the score breakdown. Positive points add suspicion, negative points add trust. */
+export interface Factor {
+  label: string;
+  points: number;
 }
 
 export interface CheckResult {
   verdict: Verdict;
   confidence: number; // 0-100
   summary: string;
+  score: number; // 0-100 suspicion score
+  breakdown: Factor[];
   checks: Check[];
   burst: boolean;
   aiVerdict: AiReading["verdict"];
@@ -65,7 +87,9 @@ export type CheckResponse =
   | { ok: false; error: string; code?: ErrorCode; notReview?: boolean };
 
 /** apology = genuine complaint (apology plus a fix); factual = can't verify it (polite, no admissions). */
-export type ReplyTone = "apology" | "factual";
+export type ReplyApproach = "apology" | "factual";
+export type ReplyLanguage = "en" | "hi" | "hinglish";
+export type ReplyStyle = "warm" | "professional" | "short";
 
 export type ReplyResponse =
   | { ok: true; reply: string; warning?: string }

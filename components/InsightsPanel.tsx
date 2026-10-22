@@ -1,5 +1,6 @@
 "use client";
 
+import FootfallView from "./FootfallView";
 import { useApp } from "./AppProvider";
 
 export default function InsightsPanel() {
@@ -20,8 +21,29 @@ export default function InsightsPanel() {
 
   const max = Math.max(1, ...data.themes.map((t) => t.count));
 
+  const flaggedClaimDays = data.footfall
+    ? data.footfall.days.filter((d) => d.claims.length > 0 && (!d.inRecords || d.bills === 0))
+    : [];
+
   return (
     <div className="stack">
+      <section className="panel">
+        <h2>Footfall vs. claimed visits</h2>
+        {data.footfall ? (
+          <>
+            <p className="muted">
+              How busy each day really was, from your bills, next to the days that 1–2 star reviews say they visited.
+              {flaggedClaimDays.length > 0
+                ? ` ${flaggedClaimDays.length} claimed day${flaggedClaimDays.length === 1 ? " has" : "s have"} no bills at all, so check those against your records.`
+                : " Every claimed day has bills on file."}
+            </p>
+            <FootfallView footfall={data.footfall} />
+          </>
+        ) : (
+          <p className="muted">Upload your bills in the Records tab to see how busy each day was.</p>
+        )}
+      </section>
+
       <section className="panel">
         <h2>What genuine complaints are about</h2>
         <p className="muted">
@@ -53,6 +75,30 @@ export default function InsightsPanel() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="panel">
+        <h2>Look-alike reviews</h2>
+        {data.similarPairs.length === 0 ? (
+          <p className="muted">No reviews with very similar wording. Look-alike text across different accounts can mean copy-and-paste posting.</p>
+        ) : (
+          <>
+            <p className="muted">These reviews use very similar words and phrases. Copy-and-paste wording across accounts is a warning sign.</p>
+            <ul className="pair-list">
+              {data.similarPairs.map((p) => (
+                <li key={p.a.id + p.b.id} className="pair">
+                  <p className="pair-score">{Math.round(p.score * 100)}% alike</p>
+                  <p>
+                    <strong>{p.a.author}:</strong> {p.a.snippet}
+                  </p>
+                  <p>
+                    <strong>{p.b.author}:</strong> {p.b.snippet}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </section>
 
       {data.excluded.length > 0 && (

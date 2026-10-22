@@ -38,7 +38,7 @@ function initials(name: string): string {
 }
 
 export default function Inbox({ selectedId, onSelect }: { selectedId: string | null; onSelect: (id: string | null) => void }) {
-  const { reviews, entries, entryOf, anchorDate, check, queue } = useApp();
+  const { reviews, entries, entryOf, anchorDate, check, queue, insights } = useApp();
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [picked, setPicked] = useState<Set<string>>(new Set());
 
@@ -88,6 +88,8 @@ export default function Inbox({ selectedId, onSelect }: { selectedId: string | n
     const tags: string[] = [];
     if (isLowDetail(r.text)) tags.push("Low detail");
     if (burst?.ids.has(r.id)) tags.push("Part of a burst");
+    const like = insights?.similarOf[r.id];
+    if (like) tags.push(`Looks like ${like.author}'s review`);
     return tags;
   }
 

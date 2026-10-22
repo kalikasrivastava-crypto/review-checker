@@ -1,6 +1,28 @@
-# Review Checker
+# DineTrust
 
-Check a suspicious negative Google review against your own order records and opening hours, get a risk level with plain reasons, and a calm reply draft you can edit, approve and copy.
+A daily tool for restaurant owners to tell fair bad Google reviews from suspicious ones. DineTrust checks each review's claims against your own opening hours, tables, bills and reservations, shows a score with the reasons, and helps you reply calmly, report fakes and brief your manager.
+
+## What is in the app
+
+| Page | What it does |
+|---|---|
+| **Dashboard** (home) | Average rating, reviews this week, % suspicious and reviews waiting for a reply. A rating trend line, a suspicious-vs-genuine chart and a "Needs attention" list of new 1–2 star reviews with a one-click Check. |
+| **Inbox** | Every review with a status (New → Checked → Replied → Reported), filters (status, stars, verdict, date), search, and a bulk **Check selected** queue with a progress bar. Add reviews by pasting them in. |
+| **Review detail** | Verdict stamp, confidence, a weighted score breakdown ("why this score"), the claim-vs-record list, reply drafts in English, Hindi or Hinglish with Warm, Professional or Short tone, a WhatsApp note for the manager, and for suspicious reviews a copy-ready Google report plus a downloadable PDF. |
+| **Insights** | Footfall calendar (how busy each day was, next to the days bad reviews claim visits), complaints grouped by theme, and look-alike reviews. |
+| **Records** | Upload bills and reservations as CSV with a column-mapping step, or use the demo data. Sample CSVs to download. |
+| **My Restaurant** | Name, contact details, opening hours per day with lunch and dinner times, number of tables and the largest party you can seat. Every check uses these. A first-time setup walks you through it, with a "demo restaurant" shortcut. |
+| **About** (`/about`) | A short page on the problem, how it works and privacy, with a "Try the demo" button. |
+
+Everything you do is saved in your browser, so a refresh keeps your statuses, checks, drafts, records and settings.
+
+### Free-tier friendly
+
+The app is built for Gemini's free plan, which allows only a few AI calls a minute:
+- AI calls are queued one at a time, at least 12 seconds apart, with a visible countdown.
+- If the AI says it is busy, the queue waits a minute and tries again (twice at most).
+- Every check and every reply draft is saved, so the same review is never checked twice. A result is marked out of date, not re-run, when you change your restaurant details.
+- If the main model's free quota runs out, the app tries a second model.
 
 ## Job to be done
 
@@ -8,16 +30,9 @@ Check a suspicious negative Google review against your own order records and ope
 
 ## The 3 tests
 
-1. **Speed.** Pick a seeded review (or paste one with its date and stars) and click **Check review**. Within 10 seconds a risk level (low, medium or high) appears with 2–3 plain-language reasons.
-2. **Evidence and reply.** Below the score, each factual claim is marked **match**, **mismatch** or **no data** against the sample orders and opening hours, and a calm reply draft is ready to edit and approve. A claim with nothing to check against always shows "no data", never "mismatch".
+1. **Speed.** Pick a review (or add one with its date and stars) and click **Check review**. Within about 10 seconds a verdict and the reasons appear.
+2. **Evidence and reply.** Each factual claim is marked **match**, **mismatch** or **no record** against your records, and a calm reply draft can be edited and approved. A claim with nothing to check against always shows "no record", never "mismatch".
 3. **Bad input.** Empty text, text too short to be a review, text that isn't a review, or the AI failing or timing out shows a clear message instead of a score, and the app doesn't crash.
-
-**Status:** all 3 tests pass in live runs on a Gemini free-tier key (`gemini-3.6-flash`).
-- **Test 1:** all 8 seeded reviews showed a risk level and reasons in 2.0–3.3 seconds. The reply draft loads separately, 4–6 seconds later.
-- **Test 2:** "table of 10 on Friday" shows mismatch; the three genuine complaints show match or no data and are rated low; both burst reviews mention the burst; all 8 replies are 64–72 words and break none of the reply rules.
-- **Test 3:** empty text, too-short text, a recipe ("This doesn't look like a review."), a missing or invalid key ("The AI service isn't set up.") and days with no orders ("no data") all show a clear message and don't crash. Invalid AI output is rejected by the answer check and retried once.
-
-Small known flaws: a claim can occasionally be listed twice (for example "appetizers" next to the wait-time claim, harmless, shown as "no data"), and free-tier rate limits can show "The AI is busy right now" if you click reviews quickly. See *Known limits*.
 
 ## Current workflow → future workflow
 
@@ -68,27 +83,27 @@ Small known flaws: a claim can occasionally be listed twice (for example "appeti
 2. **A fake review is missed:** the owner can still review suspicious cases manually; more reviewer-history signals can be added later.
 3. **The reply contains invented facts or private information:** the owner must review and edit the draft before using it. Unsupported claims and sensitive details must be removed.
 
-### As built in this MVP
-
-The text above is the target design. This repository implements a simplified version of it:
+### How this repository differs from the target design
 
 | Target design | What is built here |
 |---|---|
-| Claude analyses reviews | Gemini (`gemini-3.6-flash` by default; set `GEMINI_MODEL` to change). One small file, `lib/ai.ts`, makes the call. |
-| n8n runs the workflow | No n8n. The claim checks, burst rule and final-risk rule are plain TypeScript functions in `lib/checks.ts`. n8n can return for scheduled pulls from Google. |
-| Hosted on Vercel | Runs locally with `npm run dev`; not deployed. |
-| Reviews from a seeded CSV | 8 seeded reviews in `data/reviews.json`, plus a paste box. No CSV import. |
-| Approve and Edit | The reply box is editable; Approve shows "Approved – ready to paste into Google" and a Copy button. Nothing is posted. |
-| Policy-safe reply | Plain code flags drafts that are too long or mention records, refunds or accusations. |
-| Failure handling | Empty, too-short or non-review text, a missing or rejected key, a busy or slow AI, and unreadable AI output each show a plain message. No crash. |
+| Claude analyses reviews | Gemini (`gemini-3.6-flash` by default, with `gemini-3.8-flash` as a fallback). One small file, `lib/ai.ts`, makes the call, so switching provider means changing only that file. |
+| n8n runs the workflow | No n8n. The claim checks, burst rule, similarity check and scoring are plain TypeScript in `lib/`. n8n can return for scheduled pulls from Google. |
+| Reviews from a CSV or Google | 23 seeded demo reviews plus a form to add your own. No CSV import of reviews and no Google connection. |
+| Approve and Edit | Replies are editable, copyable and can be marked as replied. Nothing is posted to Google or WhatsApp for you. |
+| Policy-safe reply | Plain code flags drafts that are too long or mention records, refunds, amounts, bill numbers, accusations or the reviewer's name. |
+| Failure handling | Empty, too-short or non-review text, a missing or rejected key, a busy or slow AI and unreadable AI output each show a plain message. No crash. |
 
-**Flow in the code:** Input (`app/page.tsx`, `lib/validate.ts`) → AI call 1 (`app/api/check`) → Logic (`lib/checks.ts`) → AI call 2 (`app/api/reply`) → Action (owner edits and approves) → Output (`components/`). Prompts live in `lib/prompts.ts`.
+**Where the code lives:** the screens are in `components/` and `app/`; the API routes (`app/api/check`, `reply`, `insights`) call the AI; `lib/checks.ts` does the claim lookups and scoring; `lib/insights.ts` builds the dashboard data, footfall and look-alike pairs; `lib/settings.ts` holds the restaurant settings; `lib/pdf.ts` writes the PDF report; `components/AppProvider.tsx` holds the saved state and the AI queue.
 
 ## Known limits
 
-- **Free-tier Gemini keys are rate-limited** (a few requests a minute) and sometimes slow or overloaded. Each review uses 2 AI calls, so clicking quickly can hit "The AI is busy". A paid key avoids this. Speed against the 10-second goal depends on Gemini's load at the time.
-- A "mismatch" means no matching order was found in the sample records. A big group split across several tables could look like a false mismatch.
-- All data is made up. The sample orders cover 13–18 October 2026 (Mondays and Wednesdays have no orders on purpose, to exercise "no data").
+- **Free-tier Gemini keys are rate-limited** and sometimes slow or overloaded. The app queues and retries, but a big batch takes minutes (about 12 seconds per review at best). A paid key removes this.
+- A "mismatch" means no matching bill or reservation was found in the records you gave it. A large group split across several bills could look like a false mismatch.
+- Theme counts, the "genuine complaints" screen and the footfall calendar use keywords and simple date reading, not the AI, so treat them as a guide.
+- The PDF report uses plain Latin letters: Hindi or other scripts in a review show as "?".
+- Closing after midnight is not supported yet: enter 23:59 for a late close.
+- All demo data is made up. The sample bills cover 13–18 October 2026.
 
 ## Run it locally
 
@@ -101,23 +116,28 @@ npm install
 cp .env.example .env.local
 ```
 
-Open `.env.local` and paste your key after `GEMINI_API_KEY=` (no spaces or quotes). Then:
+Open `.env.local` and paste your key after `GEMINI_API_KEY=` (no spaces or quotes). Optional settings: `GEMINI_MODEL` (default `gemini-3.6-flash`) and `GEMINI_FALLBACK_MODEL` (default `gemini-3.8-flash`, used when the main model's free quota is used up). Then:
 
 ```bash
 npm run dev
 ```
 
-Open http://localhost:3000, click a review in the list, then click **Check review**. Restart `npm run dev` after changing `.env.local`.
+Open http://localhost:3000 and either finish the short setup or choose "Skip and use the demo restaurant". Restart `npm run dev` after changing `.env.local`.
+
+**On Vercel:** set `GEMINI_API_KEY` (and optionally the two model variables) under Project → Settings → Environment Variables, then redeploy.
 
 `.env.local` is ignored by git. Never commit your key.
 
 ## Project layout
 
 ```
-app/page.tsx              the one screen
-app/api/check/route.ts    validate, AI call 1, run the checks
-app/api/reply/route.ts    AI call 2, reply draft
-components/               ReviewList, ScoreCard, EvidenceTable, ReplyEditor
-lib/                      ai, prompts, validate, checks, types
-data/                     reviews.json, orders.csv, hours.json
+app/page.tsx              the app shell: header, tabs, onboarding gate
+app/about/page.tsx        the About page
+app/api/check/route.ts    AI call 1: read the review, then run the checks and scoring
+app/api/reply/route.ts    AI call 2: draft a reply (language, tone, approach)
+app/api/insights/route.ts dashboard data, footfall, themes, look-alike reviews (no AI)
+components/               Dashboard, Inbox, ReviewDetail, ReplyComposer, SettingsPanel, ...
+lib/                      ai, prompts, checks, similarity, insights, settings, records, pdf, store, ...
+data/                     reviews.json, orders.csv, reservations.csv (demo data)
+public/                   sample-bills.csv, sample-reservations.csv
 ```

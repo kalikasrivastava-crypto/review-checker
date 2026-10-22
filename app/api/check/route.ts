@@ -1,5 +1,6 @@
 import { aiErrorMessage, AiError, askAI } from "@/lib/ai";
 import { buildChecks, isBurst, settleVerdict } from "@/lib/checks";
+import { mostSimilar } from "@/lib/similarity";
 import { buildRecords } from "@/lib/records-server";
 import { SCORE_SYSTEM, scoreUser } from "@/lib/prompts";
 import { parseAiReading, sanitizeReviews, validateReviewInput } from "@/lib/validate";
@@ -48,7 +49,8 @@ export async function POST(request: Request) {
     ).records);
   const others = sanitizeReviews((input as { others?: unknown })?.others);
   const burst = isBurst(review, others.length ? [...others, review] : [review]);
-  const settled = settleVerdict(reading, checks, burst);
+  const similar = mostSimilar(review, others);
+  const settled = settleVerdict({ ai: reading, checks, burst, text: review.text, similar });
 
   return reply({
     ok: true,

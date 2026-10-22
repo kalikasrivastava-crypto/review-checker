@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import Inbox from "@/components/Inbox";
 import Dashboard from "@/components/Dashboard";
@@ -21,7 +22,7 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 export default function Home() {
-  const { customRecords, setCustomRecords, settings, hydrated } = useApp();
+  const { customRecords, setCustomRecords, settings, hydrated, toast } = useApp();
   const [tab, setTab] = useState<Tab>("dashboard");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -90,7 +91,14 @@ export default function Home() {
 
       {tab === "records" && (
         <div role="tabpanel" id="panel-records" aria-labelledby="tab-records" className="narrow">
-          <RecordsPanel custom={customRecords} demoCounts={DEMO_COUNTS} onChange={setCustomRecords} />
+          <RecordsPanel
+            custom={customRecords}
+            demoCounts={DEMO_COUNTS}
+            onChange={(next) => {
+              setCustomRecords(next);
+              toast(next ? "Your records are saved on this device" : "Back to the demo records", "success");
+            }}
+          />
         </div>
       )}
 
@@ -100,7 +108,9 @@ export default function Home() {
         </div>
       )}
 
-      <p className="footer-note">AI-assisted – check before posting.</p>
+      <p className="footer-note">
+        AI-assisted – check before posting. <Link href="/about">About DineTrust</Link>
+      </p>
     </div>
   );
 }
