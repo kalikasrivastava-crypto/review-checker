@@ -38,41 +38,6 @@
   --font-sans-stack: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --bg: #101613;
-    --surface: #17201b;
-    --surface-2: #1e2923;
-    --ink: #edf0ea;
-    --muted: #a3aea7;
-    --line: #2c3832;
-    --accent: #7ccb9b;
-    --accent-strong: #9be0b5;
-    --accent-ink: #0d1a12;
-    --accent-soft: #1c2f25;
-    --gold: #e0b54a;
-    --tone-ink: #101613;
-    --ruling: transparent;
-
-    --verified: #6fd59a;
-    --plausible: #f0b444;
-    --suspicious: #ff8a80;
-    --unverifiable: #9fb0c6;
-
-    --verified-soft: #15301f;
-    --plausible-soft: #3a2d0c;
-    --suspicious-soft: #3e1c1b;
-    --unverifiable-soft: #222d39;
-
-    --logo-back: #6b6140;
-    --logo-check: #0d1a12;
-
-    --shadow-sm: none;
-    --shadow-md: none;
-  }
-}
-
 * {
   box-sizing: border-box;
 }

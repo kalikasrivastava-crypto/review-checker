@@ -4,7 +4,7 @@ import { useId } from "react";
 // Front speech bubble (with its tail at the bottom left). The lighter bubble behind it is cut around it so the two never blur together.
 const FRONT = "M12 13H27A9 9 0 0 1 36 22V28A9 9 0 0 1 27 37H17.5L10.2 43.4A1.1 1.1 0 0 1 8.4 42.4L9.4 36.6A9 9 0 0 1 3 28V22A9 9 0 0 1 12 13Z";
 
-/** The DineTrust mark: two overlapping speech bubbles with a check. Colours follow the site's light and dark themes. */
+/** The DineTrust mark: two overlapping speech bubbles with a check. Colours come from the site's colour tokens. */
 export function LogoMark({ className }: { className?: string }) {
   const id = `cut-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   return (

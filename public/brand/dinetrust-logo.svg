@@ -1,13 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 196 48" width="196" height="48" role="img" aria-labelledby="dt-logo-title">
   <title id="dt-logo-title">DineTrust</title>
-  <style>
-    @media (prefers-color-scheme: dark) {
-      .front{fill:#7ccb9b}
-      .back{fill:#6b6140}
-      .check{stroke:#0d1a12}
-      .word{fill:#edf0ea}
-    }
-  </style>
   <defs>
     <mask id="dtl-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="48" height="48">
       <rect width="48" height="48" fill="#fff"/>

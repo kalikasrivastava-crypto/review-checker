@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Fraunces, Geist, Noto_Sans_Devanagari } from "next/font/google";
 import "./globals.css";
 import "./ui.css";
@@ -21,6 +21,11 @@ const geist = Geist({
   variable: "--font-sans",
   subsets: ["latin"],
 });
+
+// Light only: browser-drawn parts (inputs, scrollbars, file pickers) stay light even when the device is set to dark.
+export const viewport: Viewport = {
+  colorScheme: "light",
+};
 
 export const metadata: Metadata = {
   title: "DineTrust · Customer feedback insights for restaurants",
