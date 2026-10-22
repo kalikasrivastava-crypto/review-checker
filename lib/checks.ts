@@ -1,4 +1,3 @@
-import seededReviews from "@/data/reviews.json";
 import { toMinutes, type Order, type Records } from "./records";
 import type { AiReading, Check, Claim, Review, Verdict } from "./types";
 
@@ -163,9 +162,9 @@ export function buildChecks(claims: Claim[], reviewDate: Date, records: Records)
 }
 
 /** True when this one-star review sits in a 24-hour window holding 3 or more one-star reviews. */
-export function isBurst(review: Review): boolean {
+export function isBurst(review: Review, all: Review[]): boolean {
   if (review.rating !== 1) return false;
-  const times = (seededReviews as Review[])
+  const times = all
     .filter((r) => r.rating === 1 && !(r.date === review.date && r.text === review.text))
     .map((r) => new Date(r.date).getTime());
   const mine = new Date(review.date).getTime();

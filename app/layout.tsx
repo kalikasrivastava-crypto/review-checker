@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Geist } from "next/font/google";
 import "./globals.css";
+import AppProvider from "@/components/AppProvider";
 
 const fraunces = Fraunces({
   variable: "--font-serif",
@@ -21,7 +22,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${fraunces.variable} ${geist.variable}`}>
-      <body>{children}</body>
+      <body>
+        <AppProvider>{children}</AppProvider>
+      </body>
     </html>
   );
 }

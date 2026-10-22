@@ -187,3 +187,11 @@ export function sanitizeUploaded(input: unknown): { orders: Order[]; reservation
   });
   return { orders, reservations };
 }
+
+/** Records the owner uploaded. Kept in the browser; a missing file means "no records", not demo data. */
+export interface CustomRecords {
+  orders: Order[] | null;
+  ordersName: string;
+  reservations: Reservation[] | null;
+  reservationsName: string;
+}

@@ -9,6 +9,9 @@ const BANNED =
 const MONEY = /[$£€₹]\s?\d|\b\d+(\.\d{2})?\s?(usd|gbp|eur|inr|dollars|pounds|euros|rupees)\b/i;
 const BILL_ID = /\bB\d{3,}\b/;
 
+// Allow time for the slower fallback model.
+export const maxDuration = 40;
+
 function reply(body: ReplyResponse, status = 200) {
   return Response.json(body, { status });
 }
@@ -35,10 +38,10 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return reply({ ok: false, error: "Couldn't draft a reply." }, 400);
+    return reply({ ok: false, error: "Couldn't draft a reply.", code: "bad_input" }, 400);
   }
   const checked = validateReviewInput(body.review);
-  if ("error" in checked) return reply({ ok: false, error: checked.error }, 400);
+  if ("error" in checked) return reply({ ok: false, error: checked.error, code: "bad_input" }, 400);
   const tone: ReplyTone = body.tone === "factual" ? "factual" : "apology";
   // Only the claim and its status go to the AI: record details (dates, party sizes, dishes) stay private.
   const checks = (Array.isArray(body.checks) ? (body.checks as Check[]) : []).map((c) => ({
@@ -51,6 +54,6 @@ export async function POST(request: Request) {
     return reply({ ok: true, reply: text, warning: ruleWarning(text, checked.review) });
   } catch (err) {
     const code = err instanceof AiError ? err.code : "unavailable";
-    return reply({ ok: false, error: aiErrorMessage(code) }, code === "no_key" ? 503 : 502);
+    return reply({ ok: false, error: aiErrorMessage(code), code }, code === "no_key" ? 503 : 502);
   }
 }

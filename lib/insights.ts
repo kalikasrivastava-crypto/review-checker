@@ -1,4 +1,3 @@
-import seeded from "@/data/reviews.json";
 import { buildChecks, isBurst } from "./checks";
 import { isLowDetail } from "./patterns";
 import type { Records } from "./records";
@@ -66,39 +65,51 @@ export interface Excluded {
   reason: string;
 }
 
+/** A code-only first look at a review: does anything in it already clash with the records? */
+export interface Screen {
+  flagged: boolean;
+  reasons: string[];
+}
+
 export interface Insights {
   total: number;
   genuine: number;
   themes: { key: ThemeKey; label: string; count: number; reviews: { id: string; author: string; snippet: string }[] }[];
   excluded: Excluded[];
+  screens: Record<string, Screen>;
+}
+
+export function screenReview(r: Review, records: Records, all: Review[]): Screen {
+  if (r.rating > 3) return { flagged: false, reasons: [] };
+  const reasons: string[] = [];
+  const checks = buildChecks(roughClaims(r.text), new Date(r.date), records);
+  const mismatch = checks.find((c) => c.status === "mismatch");
+  const strongMatch = checks.some((c) => c.status === "match" && !/opening hours/.test(c.record));
+  if (mismatch) reasons.push(`A claim doesn't fit your records: ${mismatch.record}`);
+  if (isBurst(r, all) && !strongMatch) {
+    reasons.push("One of several one-star reviews in 24 hours, and nothing in it could be confirmed.");
+  }
+  if (!mismatch && isLowDetail(r.text)) reasons.push("Strong feeling but no details to check (low detail).");
+  return { flagged: reasons.length > 0, reasons };
 }
 
 /**
- * Group genuine complaints by theme. A review counts as a genuine complaint when it is 3 stars or lower,
- * has some detail, its claims don't clash with the records and it isn't an unconfirmed one-star burst.
- * This is a code-only screen, so it doesn't need an AI call per review.
+ * Group genuine complaints by theme. A review counts as a genuine complaint when it is 3 stars or lower
+ * and the code-only screen finds nothing wrong with it. No AI call is needed per review.
  */
-export function buildInsights(records: Records): Insights {
-  const reviews = seeded as Review[];
+export function buildInsights(records: Records, reviews: Review[]): Insights {
   const excluded: Excluded[] = [];
   const genuine: Review[] = [];
+  const screens: Record<string, Screen> = {};
 
   for (const r of reviews) {
     const who = r.author ?? "Reviewer";
     const id = r.id ?? who;
+    const screen = screenReview(r, records, reviews);
+    screens[id] = screen;
     if (r.rating > 3) continue;
-    const checks = buildChecks(roughClaims(r.text), new Date(r.date), records);
-    const mismatch = checks.find((c) => c.status === "mismatch");
-    const strongMatch = checks.some((c) => c.status === "match" && !/opening hours/.test(c.record));
-    if (mismatch) {
-      excluded.push({ id, author: who, reason: `A claim doesn't fit your records: ${mismatch.record}` });
-    } else if (isBurst(r) && !strongMatch) {
-      excluded.push({ id, author: who, reason: "One of several one-star reviews in 24 hours, and nothing in it could be confirmed." });
-    } else if (isLowDetail(r.text)) {
-      excluded.push({ id, author: who, reason: "Strong feeling but no details to check (low detail)." });
-    } else {
-      genuine.push(r);
-    }
+    if (screen.flagged) excluded.push({ id, author: who, reason: screen.reasons[0] });
+    else genuine.push(r);
   }
 
   const themes = THEMES.map((t) => {
@@ -115,5 +126,5 @@ export function buildInsights(records: Records): Insights {
     };
   }).sort((a, b) => b.count - a.count);
 
-  return { total: reviews.length, genuine: genuine.length, themes, excluded };
+  return { total: reviews.length, genuine: genuine.length, themes, excluded, screens };
 }

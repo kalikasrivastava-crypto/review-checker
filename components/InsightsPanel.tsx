@@ -1,35 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { Insights } from "@/lib/insights";
-import type { CustomRecords } from "./RecordsPanel";
+import { useApp } from "./AppProvider";
 
-export default function InsightsPanel({ custom }: { custom: CustomRecords | null }) {
-  const [data, setData] = useState<Insights | null>(null);
-  const [error, setError] = useState<string | null>(null);
+export default function InsightsPanel() {
+  const { insights: data, insightsLoading } = useApp();
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/insights", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        custom ? { records: { orders: custom.orders ?? [], reservations: custom.reservations ?? [] } } : {},
-      ),
-    })
-      .then((r) => r.json())
-      .then((j) => {
-        if (cancelled) return;
-        if (j.ok) setData(j.insights as Insights);
-        else setError("Couldn't load insights. Try again.");
-      })
-      .catch(() => !cancelled && setError("Couldn't load insights. Try again."));
-    return () => {
-      cancelled = true;
-    };
-  }, [custom]);
-
-  if (error) return <p className="notice notice-error">{error}</p>;
+  if (!data && !insightsLoading) return <p className="notice notice-error">Couldn&apos;t load insights. Try again.</p>;
   if (!data) {
     return (
       <div className="panel" aria-label="Loading insights">
@@ -49,7 +25,7 @@ export default function InsightsPanel({ custom }: { custom: CustomRecords | null
       <section className="panel">
         <h2>What genuine complaints are about</h2>
         <p className="muted">
-          {data.genuine} of {data.total} sample reviews look like genuine complaints. The other{" "}
+          {data.genuine} of {data.total} reviews look like genuine complaints. The other{" "}
           {data.total - data.genuine} were left out because they are positive, don&apos;t fit your records, or are
           unconfirmed bursts. Themes come from keywords in the review text, so treat the counts as a guide.
         </p>

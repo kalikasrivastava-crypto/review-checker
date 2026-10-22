@@ -76,3 +76,25 @@ export function parseAiReading(raw: string): AiReading | null {
     claims,
   };
 }
+
+export const MAX_OTHER_REVIEWS = 400;
+
+/** The rest of the owner's inbox, sent along so bursts and look-alike wording can be spotted. */
+export function sanitizeReviews(input: unknown): Review[] {
+  if (!Array.isArray(input)) return [];
+  return input.slice(0, MAX_OTHER_REVIEWS).flatMap((r): Review[] => {
+    const x = r as Partial<Review>;
+    const rating = Number(x?.rating);
+    if (typeof x?.text !== "string" || typeof x?.date !== "string") return [];
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5 || Number.isNaN(new Date(x.date).getTime())) return [];
+    return [
+      {
+        id: typeof x.id === "string" ? x.id.slice(0, 60) : undefined,
+        author: typeof x.author === "string" ? x.author.slice(0, 60) : undefined,
+        rating,
+        date: x.date,
+        text: x.text.slice(0, 2000),
+      },
+    ];
+  });
+}

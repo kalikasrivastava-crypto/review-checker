@@ -1,14 +1,7 @@
 "use client";
 
 import UploadStep from "./UploadStep";
-import type { Order, Reservation } from "@/lib/records";
-
-export interface CustomRecords {
-  orders: Order[] | null;
-  ordersName: string;
-  reservations: Reservation[] | null;
-  reservationsName: string;
-}
+import type { CustomRecords, Order, Reservation } from "@/lib/records";
 
 interface Props {
   custom: CustomRecords | null;

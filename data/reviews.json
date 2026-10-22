@@ -54,5 +54,110 @@
     "rating": 1,
     "date": "2026-10-21T06:10:00",
     "text": "Worst dinner of my life. Got sick after eating there on Friday. Filthy place and terrible food, stay away from this restaurant."
+  },
+  {
+    "id": "r1",
+    "author": "Anil M.",
+    "rating": 5,
+    "date": "2026-09-08T21:15:00",
+    "text": "Wonderful evening. The gnocchi was perfect and the staff made our anniversary feel special. We will be back."
+  },
+  {
+    "id": "r2",
+    "author": "Meera K.",
+    "rating": 4,
+    "date": "2026-09-10T13:40:00",
+    "text": "Lovely food and a calm room. The pizza crust was great. A little loud when the big table arrived."
+  },
+  {
+    "id": "r3",
+    "author": "Rahul D.",
+    "rating": 5,
+    "date": "2026-09-12T20:05:00",
+    "text": "Best tiramisu in town. Friendly service and we were seated quickly. Highly recommend."
+  },
+  {
+    "id": "r4",
+    "author": "Sneha P.",
+    "rating": 2,
+    "date": "2026-09-16T10:20:00",
+    "text": "We came on Friday around 8 PM, party of 5. We waited 45 minutes for our mains and nobody gave us an update. The food was fine once it arrived."
+  },
+  {
+    "id": "r5",
+    "author": "Vikram S.",
+    "rating": 4,
+    "date": "2026-09-18T18:30:00",
+    "text": "Good pasta, reasonable prices and polite staff."
+  },
+  {
+    "id": "r6",
+    "author": "Ananya R.",
+    "rating": 5,
+    "date": "2026-09-20T22:10:00",
+    "text": "A perfect dinner. The salmon was cooked exactly right."
+  },
+  {
+    "id": "r7",
+    "author": "Kabir J.",
+    "rating": 3,
+    "date": "2026-09-24T09:50:00",
+    "text": "Service felt slow on Saturday evening and we waited a long time to get the bill. The food was good though."
+  },
+  {
+    "id": "r8",
+    "author": "Isha T.",
+    "rating": 4,
+    "date": "2026-09-27T20:45:00",
+    "text": "Nice calamari and a good wine list. Would come again."
+  },
+  {
+    "id": "r9",
+    "author": "Dev N.",
+    "rating": 5,
+    "date": "2026-09-30T19:10:00",
+    "text": "Great risotto, lovely staff and a spotless dining room."
+  },
+  {
+    "id": "r10",
+    "author": "Pooja V.",
+    "rating": 3,
+    "date": "2026-10-02T11:25:00",
+    "text": "An okay experience. The soup was lukewarm on Thursday night, but they replaced it quickly."
+  },
+  {
+    "id": "r11",
+    "author": "Arjun B.",
+    "rating": 4,
+    "date": "2026-10-05T21:00:00",
+    "text": "Cosy place. The margherita pizza was the highlight."
+  },
+  {
+    "id": "r12",
+    "author": "Nisha G.",
+    "rating": 5,
+    "date": "2026-10-08T14:30:00",
+    "text": "Fantastic service and a great ribeye. Thank you!"
+  },
+  {
+    "id": "r13",
+    "author": "Rohan L.",
+    "rating": 2,
+    "date": "2026-10-10T09:15:00",
+    "text": "Cold lasagna on Friday around 7 PM, table of 4. They offered to reheat it but we had already lost our appetite."
+  },
+  {
+    "id": "r14",
+    "author": "Tara A.",
+    "rating": 4,
+    "date": "2026-10-12T20:20:00",
+    "text": "Friendly team and tasty gnocchi."
+  },
+  {
+    "id": "b3",
+    "author": "Sam R.",
+    "rating": 1,
+    "date": "2026-10-21T08:40:00",
+    "text": "Worst dinner of my life. Got sick after eating there on Friday. Filthy place, terrible food, avoid this restaurant."
   }
 ]

@@ -1,7 +1,10 @@
 // One small helper that calls the Gemini API. The key is read on the server from .env.local.
 // gemini-3.6-flash answered in about 2-6 s in testing. Set GEMINI_MODEL in .env.local to try another.
 const MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-3.6-flash";
+// If the main model's free quota is used up (HTTP 429), try this one before giving up.
+const FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL?.trim() || "gemini-3.8-flash";
 const TIMEOUT_MS = 9000;
+const FALLBACK_TIMEOUT_MS = 25000; // the fallback model is slower, and it only runs when the main one is out of quota
 
 export type AiErrorCode = "no_key" | "busy" | "timeout" | "unavailable" | "refused" | "empty";
 
@@ -27,8 +30,8 @@ export function aiErrorMessage(code: AiErrorCode): string {
   }
 }
 
-function send(apiKey: string, system: string, user: string, json: boolean, signal: AbortSignal) {
-  return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+function send(apiKey: string, model: string, system: string, user: string, json: boolean, signal: AbortSignal) {
+  return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify({
@@ -49,14 +52,18 @@ export async function askAI(system: string, user: string, json = false): Promise
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey || apiKey === "PASTE_YOUR_KEY_HERE") throw new AiError("no_key");
 
-  const signal = AbortSignal.timeout(TIMEOUT_MS); // one deadline for the call and its retry
+  let signal = AbortSignal.timeout(TIMEOUT_MS); // one deadline for the call and its retry
   let res: Response;
   try {
-    res = await send(apiKey, system, user, json, signal);
+    res = await send(apiKey, MODEL, system, user, json, signal);
+    if (res.status === 429 && FALLBACK_MODEL && FALLBACK_MODEL !== MODEL) {
+      signal = AbortSignal.timeout(FALLBACK_TIMEOUT_MS);
+      res = await send(apiKey, FALLBACK_MODEL, system, user, json, signal);
+    }
     // Gemini sometimes answers "high demand" (503). One quick retry usually gets through.
     if (res.status === 503) {
       await new Promise((r) => setTimeout(r, 500));
-      res = await send(apiKey, system, user, json, signal);
+      res = await send(apiKey, MODEL, system, user, json, signal);
     }
   } catch (err) {
     if (err instanceof Error && err.name === "TimeoutError") throw new AiError("timeout");

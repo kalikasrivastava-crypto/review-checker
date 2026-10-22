@@ -3,8 +3,11 @@ import { buildChecks, isBurst, settleVerdict } from "@/lib/checks";
 import { loadDefaultRecords } from "@/lib/records-default";
 import { sanitizeUploaded, type Records } from "@/lib/records";
 import { SCORE_SYSTEM, scoreUser } from "@/lib/prompts";
-import { parseAiReading, validateReviewInput } from "@/lib/validate";
+import { parseAiReading, sanitizeReviews, validateReviewInput } from "@/lib/validate";
 import type { AiReading, CheckResponse } from "@/lib/types";
+
+// Allow time for the slower fallback model.
+export const maxDuration = 40;
 
 function reply(body: CheckResponse, status = 200) {
   return Response.json(body, { status });
@@ -25,11 +28,11 @@ export async function POST(request: Request) {
   try {
     input = await request.json();
   } catch {
-    return reply({ ok: false, error: "Paste a review first." }, 400);
+    return reply({ ok: false, error: "Paste a review first.", code: "bad_input" }, 400);
   }
 
   const checked = validateReviewInput(input);
-  if ("error" in checked) return reply({ ok: false, error: checked.error }, 400);
+  if ("error" in checked) return reply({ ok: false, error: checked.error, code: "bad_input" }, 400);
   const { review } = checked;
 
   // AI call 1: read the review. One automatic retry if the answer isn't valid JSON.
@@ -40,10 +43,10 @@ export async function POST(request: Request) {
     }
   } catch (err) {
     const code = err instanceof AiError ? err.code : "unavailable";
-    return reply({ ok: false, error: aiErrorMessage(code) }, code === "no_key" ? 503 : 502);
+    return reply({ ok: false, error: aiErrorMessage(code), code }, code === "no_key" ? 503 : 502);
   }
   if (!reading) {
-    return reply({ ok: false, error: "Couldn't read the AI's answer. Try again." }, 502);
+    return reply({ ok: false, error: "Couldn't read the AI's answer. Try again.", code: "unreadable" }, 502);
   }
   if (!reading.is_review) {
     return reply({ ok: false, notReview: true, error: "This doesn't look like a review." });
@@ -51,7 +54,8 @@ export async function POST(request: Request) {
 
   // Plain code from here: check claims against the records, apply the burst rule, settle the verdict.
   const checks = buildChecks(reading.claims, new Date(review.date), recordsFor(input));
-  const burst = isBurst(review);
+  const others = sanitizeReviews((input as { others?: unknown })?.others);
+  const burst = isBurst(review, others.length ? [...others, review] : [review]);
   const settled = settleVerdict(reading, checks, burst);
 
   return reply({

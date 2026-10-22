@@ -17,6 +17,15 @@ export interface Review {
   author?: string;
 }
 
+/** A review in the inbox: always has an id. */
+export interface ReviewItem extends Review {
+  id: string;
+  author: string;
+  source: "demo" | "added";
+}
+
+export type ErrorCode = "no_key" | "busy" | "timeout" | "unavailable" | "refused" | "empty" | "bad_input" | "unreadable";
+
 export interface Claim {
   text: string;
   type: ClaimType;
@@ -53,11 +62,11 @@ export interface CheckResult {
 
 export type CheckResponse =
   | { ok: true; result: CheckResult }
-  | { ok: false; error: string; notReview?: boolean };
+  | { ok: false; error: string; code?: ErrorCode; notReview?: boolean };
 
 /** apology = genuine complaint (apology plus a fix); factual = can't verify it (polite, no admissions). */
 export type ReplyTone = "apology" | "factual";
 
 export type ReplyResponse =
   | { ok: true; reply: string; warning?: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string; code?: ErrorCode };
