@@ -14,7 +14,12 @@ Check a suspicious negative Google review against your own order records and ope
 2. **Evidence and reply.** Below the score, each factual claim is marked **match**, **mismatch** or **no data** against the sample orders and opening hours, and a calm reply draft is ready to edit and approve. A claim with nothing to check against always shows "no data", never "mismatch".
 3. **Bad input.** Empty text, text too short to be a review, text that isn't a review, or the AI failing or timing out shows a clear message instead of a score, and the app doesn't crash.
 
-**Status (honest):** Test 3's offline cases (empty, too short, missing date or key) pass. On the Gemini free tier, 6 of the 8 seeded reviews scored in 5–7 seconds each, with the expected mismatch ("table of 10 on Friday") and burst results, and 5 reply drafts obeyed the reply rules. Two reviews (Marcus T. and Chris W.) failed with timeouts or "high demand" errors, and the "not a review" and invalid-JSON cases were not run live. Fixes for speed and reliability were added afterwards but not re-verified end to end, because the free-tier quota ran out. See *Known limits*.
+**Status:** all 3 tests pass in live runs on a Gemini free-tier key (`gemini-3.6-flash`).
+- **Test 1:** all 8 seeded reviews showed a risk level and reasons in 2.0–3.3 seconds. The reply draft loads separately, 4–6 seconds later.
+- **Test 2:** "table of 10 on Friday" shows mismatch; the three genuine complaints show match or no data and are rated low; both burst reviews mention the burst; all 8 replies are 64–72 words and break none of the reply rules.
+- **Test 3:** empty text, too-short text, a recipe ("This doesn't look like a review."), a missing or invalid key ("The AI service isn't set up.") and days with no orders ("no data") all show a clear message and don't crash. Invalid AI output is rejected by the answer check and retried once.
+
+Small known flaws: a claim can occasionally be listed twice (for example "appetizers" next to the wait-time claim, harmless, shown as "no data"), and free-tier rate limits can show "The AI is busy right now" if you click reviews quickly. See *Known limits*.
 
 ## Current workflow → future workflow
 
