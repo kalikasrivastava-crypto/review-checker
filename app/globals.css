@@ -3791,3 +3791,80 @@ input:lang(hi) {
   text-align: right;
   font-weight: 600;
 }
+
+/* ---------- Priorities ---------- */
+
+.priority-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+  display: grid;
+  gap: 14px;
+}
+
+.priority {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--bg);
+  display: grid;
+  gap: 6px;
+}
+
+.priority-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.priority-head h3 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.priority-num {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.priority-evidence {
+  margin: 0;
+}
+
+.priority-concerns,
+.priority-steps {
+  margin: 0;
+  padding: 0;
+}
+
+.priority-concerns {
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.priority-concerns li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.92rem;
+}
+
+.priority-concerns strong {
+  white-space: nowrap;
+}
+
+.priority-steps {
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  font-size: 0.92rem;
+}

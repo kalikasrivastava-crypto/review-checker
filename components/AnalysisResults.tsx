@@ -1,3 +1,4 @@
+import PrioritiesSection from "./PrioritiesSection";
 import ThemeCard from "./ThemeCard";
 import type { AnalysisResult } from "@/lib/analysis";
 
@@ -70,10 +71,16 @@ export default function AnalysisResults({ analysis, isSample }: { analysis: Anal
             </li>
             <li>A &ldquo;not&rdquo; or &ldquo;never&rdquo; just before a phrase turns it around, so &ldquo;not cold&rdquo; is not counted as a concern.</li>
             <li>A theme is &ldquo;mostly positive&rdquo; or &ldquo;mostly negative&rdquo; when at least 60% of its reviews lean that way. Otherwise it is &ldquo;mixed&rdquo;.</li>
+            <li>
+              &ldquo;Where to look first&rdquo; ranks the five main themes by how many reviews raise a concern in them. An area needs at least 3 such reviews to
+              appear. The next steps are general suggestions written in advance, not findings about your restaurant.
+            </li>
             <li>It reads English only, can misread sarcasm or unusual wording, and only finds phrases it knows. Treat the counts as a guide to what customers mention, not as proof of why things happen.</li>
           </ul>
         </details>
       </section>
+
+      <PrioritiesSection analysis={analysis} isSample={isSample} />
 
       {mentioned.map((t) => (
         <ThemeCard key={t.key} theme={t} totalReviews={analysis.reviewCount} />

@@ -3,6 +3,7 @@
 // Run it with:  node scripts/check-analysis.mjs
 import fs from "node:fs";
 import { analyseReviews } from "../lib/analysis.ts";
+import { buildPriorities } from "../lib/priorities.ts";
 
 let failures = 0;
 const check = (name, actual, expected) => {
@@ -89,6 +90,31 @@ check("sample: 'too high' price sentences match the concern count", concernCount
 check("sample: 'sticky table' sentences match the concern count", concernCount("clean", "Dirty tables or cutlery"), has("The table was sticky", "The cutlery had stains"));
 check("sample: 'cold food' sentences match the concern count", concernCount("food", "Food served cold or lukewarm"), has("was cold when it reached our table"));
 check("sample: reviews with no theme", s.reviewsWithNoTheme, rows.filter((rw) => rw.text === "Hope they fix this.").length);
+
+// ---------- Part 3: priorities ----------
+// 19 reviews built so the answer is clear: 5 slow service, 4 cold food, 3 overpriced (+2 value praise), 3 noisy, 2 sticky tables.
+const many = (n, text, rating) => Array.from({ length: n }, (_, i) => r(i ? `${text} (visit ${i + 1})` : text, rating));
+const set = [
+  ...many(5, "Service was very slow tonight.", 2),
+  ...many(4, "The food was cold.", 2),
+  ...many(3, "Overpriced for what you get.", 2),
+  ...many(2, "Good value for money.", 5),
+  ...many(3, "Way too noisy.", 2),
+  ...many(2, "The table was sticky.", 2),
+];
+const p = buildPriorities(analyseReviews(set));
+check("priorities: 19 reviews is a small sample", [p.totalReviews, p.smallSample], [19, true]);
+check("priorities: ranked by reviews voicing a concern (slow service 5, cold food 4, noise 3)", p.priorities.map((x) => [x.label, x.concernedReviews]), [["Service speed", 5], ["Food quality", 4], ["Ambience", 3]]);
+check("priorities: pricing ties noise on 3 but is only 3 of 5 negative, so noise wins the third place", p.priorities.some((x) => x.key === "price"), false);
+check("priorities: cleanliness (2 reviews) is below the minimum of 3", p.priorities.some((x) => x.key === "clean"), false);
+check("priorities: share of all reviews is a real fraction (5/19)", p.priorities[0].shareOfAll, 5 / 19);
+check("priorities: top concern and its count come from the data", [p.priorities[0].concerns[0].label, p.priorities[0].concerns[0].reviews], ["Long wait for food or service", 5]);
+check("priorities: every priority has next steps ending with the 'check your own records' step", p.priorities.every((x) => x.steps.length >= 2 && x.steps[x.steps.length - 1].startsWith("Before changing anything")), true);
+const FORBIDDEN = /\b(caus(?:e|es|ed|ing)|because|proves?|proof|fake|root cause|reason why)\b/i;
+check("priorities: wording never claims a cause, proof or 'fake' (steps and labels)", p.priorities.flatMap((x) => [...x.steps.slice(0, -1), x.label, ...x.concerns.map((c) => c.label)]).filter((t) => FORBIDDEN.test(t) && !t.includes("does not show what caused it")), []);
+check("priorities: too few concerns gives no priorities, not invented ones", buildPriorities(analyseReviews([r("Service was very slow tonight.", 2), r("The food was cold.", 2), r("Lovely food and nice staff.", 5)])).priorities, []);
+check("priorities: on the sample file too, every priority ends with the 'check your own records' step and has at most 4 steps", buildPriorities(s).priorities.every((x) => x.steps.length <= 4 && x.steps[x.steps.length - 1].startsWith("Before changing anything")), true);
+check("priorities: sample file gives three priorities, each with enough reviews", (() => { const sp = buildPriorities(s); return [sp.priorities.length, sp.priorities.every((x) => x.concernedReviews >= 3)]; })(), [3, true]);
 
 console.log(failures === 0 ? "\nAll checks passed." : `\n${failures} check(s) FAILED.`);
 process.exit(failures === 0 ? 0 : 1);
