@@ -61,6 +61,13 @@ check("a theme nobody mentions is reported as null, not guessed", analyseReviews
 check("'worth the wait' is not read as praise for prices", analyseReviews([r("The waiter was slow but the biryani was worth the wait.", null)]).themes.find((x) => x.key === "price").reviews, 0);
 check("'cold coffee ... great' counts as positive food, not a cold-food concern", (() => { const f = analyseReviews([r("Tried the cold coffee, it was great.", null)]).themes.find((x) => x.key === "food"); return [f.sentiment, f.concerns.length]; })(), ["positive", 0]);
 
+const both = analyseReviews([r("Lovely food and a calm atmosphere.", 5)]);
+check("a general opinion word still credits a theme with no phrase of its own ('lovely food' + 'calm atmosphere')", ["food", "ambience"].map((k) => both.themes.find((x) => x.key === k).sentiment), ["positive", "positive"]);
+const dull = analyseReviews([r("The food was cold and the music was nice.", 3)]);
+check("one piece can be negative for one theme and positive for another", ["food", "ambience"].map((k) => dull.themes.find((x) => x.key === k).sentiment), ["negative", "positive"]);
+const speedExamples = analyseReviews([r("Service was very slow.", 2), r("Service was very slow.", 2), r("We waited an hour for our food.", 2)]).themes.find((x) => x.key === "speed").examples;
+check("examples prefer a different wording over repeating one", speedExamples.slice(0, 2).map((e) => e.excerpt), ["Service was very slow.", "We waited an hour for our food."]);
+
 // ---------- Part 2: the sample file against independent counts ----------
 const lines = fs.readFileSync(new URL("../public/sample-reviews.csv", import.meta.url), "utf8").trim().split(/\r?\n/).slice(1);
 const rows = lines.map((l) => {

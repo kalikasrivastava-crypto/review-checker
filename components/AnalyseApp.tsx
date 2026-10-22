@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import AnalysisResults from "./AnalysisResults";
+import { analyseReviews } from "@/lib/analysis";
 import {
   buildReviews,
   MAX_FILE_BYTES,
@@ -79,6 +81,7 @@ export default function AnalyseApp() {
     setLoading(false);
   }
 
+  const analysis = useMemo(() => (result && result.reviews.length > 0 ? analyseReviews(result.reviews) : null), [result]);
   const s = result?.summary;
   const withRating = s ? s.used - s.ratingMissing - s.ratingUnreadable : 0;
   const textMissing = !!source && source.columns.text === undefined;
@@ -280,7 +283,6 @@ export default function AnalyseApp() {
                       </tbody>
                     </table>
                   </div>
-                  <p className="muted small">The theme analysis is the next step and isn&apos;t built yet.</p>
                 </>
               )}
             </>
@@ -300,6 +302,8 @@ export default function AnalyseApp() {
           </div>
         </section>
       )}
+
+      {source && analysis && <AnalysisResults analysis={analysis} isSample={source.kind === "sample"} />}
     </div>
   );
 }

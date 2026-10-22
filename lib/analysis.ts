@@ -302,9 +302,9 @@ function readPiece(piece: string): Map<ThemeKey, Hit> {
     if (needsFallback && hit.concerns.size === 0) hit.concerns.add(def.fallbackConcern);
     if (hit.pos + hit.neg > 0) hits.set(def.key, hit);
   }
-  if (hits.size > 0) return hits;
 
-  // No phrase matched: fall back on general opinion words, and place them by the topic words in the piece.
+  // General opinion words ("lovely", "terrible") credit a theme that has no phrase match of its own, when a word
+  // about that theme ("food", "music", "bill") appears in the same piece. With no theme word at all, they go to "other".
   let pos = 0;
   let neg = 0;
   for (const m of lower.matchAll(POS_WORDS)) {
@@ -316,8 +316,9 @@ function readPiece(piece: string): Map<ThemeKey, Hit> {
     else neg++;
   }
   if (pos + neg === 0) return hits;
-  const topical = THEMES.filter((d) => d.key !== "other" && d.topic.test(lower));
-  for (const def of topical.length ? topical : THEMES.filter((d) => d.key === "other")) {
+  const topical = THEMES.filter((d) => d.key !== "other" && !hits.has(d.key) && d.topic.test(lower));
+  const targets = topical.length > 0 ? topical : hits.size === 0 ? THEMES.filter((d) => d.key === "other") : [];
+  for (const def of targets) {
     hits.set(def.key, { pos, neg, strength: 0, concerns: neg > pos ? new Set([def.fallbackConcern]) : new Set() });
   }
   return hits;
@@ -418,8 +419,12 @@ export function analyseReviews(reviews: ParsedReview[]): AnalysisResult {
     // Examples: reviews that lean the way the theme does, strongest phrase matches first, then shortest.
     const rank = (a: Mention, b: Mention) => b.strength - a.strength || reviews[a.index].text.length - reviews[b.index].text.length || a.index - b.index;
     const picked: Mention[] = [];
+    // Prefer a review that says something different from the ones already chosen; repeat a wording only if nothing else is left.
+    const seenWording = () => new Set(picked.map((m) => m.excerpts[0].toLowerCase()));
     const take = (tone: Tone) => {
-      const next = list.filter((m) => m.tone === tone && !picked.includes(m)).sort(rank)[0];
+      const rest = list.filter((m) => m.tone === tone && !picked.includes(m)).sort(rank);
+      const fresh = rest.find((m) => !seenWording().has(m.excerpts[0].toLowerCase()));
+      const next = fresh ?? rest[0];
       if (next) picked.push(next);
     };
     if (sentiment === "mixed") {
@@ -432,7 +437,8 @@ export function analyseReviews(reviews: ParsedReview[]): AnalysisResult {
       const before = picked.length;
       take(lean);
       if (picked.length === before) {
-        const any = list.filter((m) => !picked.includes(m)).sort(rank)[0];
+        const rest = list.filter((m) => !picked.includes(m)).sort(rank);
+        const any = rest.find((m) => !seenWording().has(m.excerpts[0].toLowerCase())) ?? rest[0];
         if (!any) break;
         picked.push(any);
       }
