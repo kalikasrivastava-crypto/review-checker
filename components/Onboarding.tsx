@@ -5,9 +5,8 @@ import { useState } from "react";
 import Masthead from "./Masthead";
 import RecordsBox from "./RecordsBox";
 import RestaurantForm from "./RestaurantForm";
-import { useApp } from "./AppProvider";
+import { useApp, type RecordsInput } from "./AppProvider";
 import { BLANK_SETTINGS, settingsIssues, type RestaurantSettings, type Section } from "@/lib/settings";
-import type { CustomRecords } from "@/lib/records";
 
 const STEPS: { title: string; blurb: string; sections: Section[] }[] = [
   { title: "Your restaurant", blurb: "So replies carry your contact details.", sections: ["basics"] },
@@ -16,20 +15,25 @@ const STEPS: { title: string; blurb: string; sections: Section[] }[] = [
 ];
 
 export default function Onboarding() {
-  const { finishSetup, setCustomRecords, startDemo, toast } = useApp();
+  const { createRestaurant, toast } = useApp();
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<RestaurantSettings>(BLANK_SETTINGS);
-  const [records, setRecords] = useState<CustomRecords | null>(null);
+  const [records, setRecords] = useState<RecordsInput>({});
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [showIssues, setShowIssues] = useState(false);
 
   const current = STEPS[step];
   const issues = settingsIssues(draft).filter((i) => current.sections.includes(i.section));
   const last = step === STEPS.length - 1;
 
-  function finish(withRecords: boolean) {
-    if (withRecords && records) setCustomRecords(records);
-    finishSetup(draft);
-    toast(`Welcome to DineTrust, ${draft.name.trim()}`, "success");
+  async function finish(withRecords: boolean) {
+    setSaving(true);
+    setSaveError(null);
+    const ok = await createRestaurant(draft, withRecords ? records : undefined);
+    setSaving(false);
+    if (ok) toast(`Welcome to DineTrust, ${draft.name.trim()}`, "success");
+    else setSaveError("Couldn't save your restaurant. Check your connection and try again.");
   }
 
   function next() {
@@ -39,7 +43,7 @@ export default function Onboarding() {
     }
     setShowIssues(false);
     if (!last) return setStep(step + 1);
-    finish(true);
+    void finish(true);
   }
 
   return (
@@ -64,9 +68,25 @@ export default function Onboarding() {
 
       {last && (
         <>
-          <RecordsBox kind="bills" custom={records} onChange={setRecords} />
-          <RecordsBox kind="reservations" custom={records} onChange={setRecords} />
+          <RecordsBox
+            kind="bills"
+            count={records.orders?.length ?? 0}
+            fileName={records.ordersName ?? ""}
+            onUse={(name, rows) => setRecords((r) => ({ ...r, orders: rows as never, ordersName: name }))}
+          />
+          <RecordsBox
+            kind="reservations"
+            count={records.reservations?.length ?? 0}
+            fileName={records.reservationsName ?? ""}
+            onUse={(name, rows) => setRecords((r) => ({ ...r, reservations: rows as never, reservationsName: name }))}
+          />
         </>
+      )}
+
+      {saveError && (
+        <p className="notice notice-error" role="alert">
+          {saveError}
+        </p>
       )}
 
       {showIssues && issues.length > 0 && (
@@ -86,19 +106,16 @@ export default function Onboarding() {
               Back
             </button>
           )}
-          <button type="button" className="btn btn-solid" onClick={next}>
-            {last ? "Finish setup" : "Next"}
+          <button type="button" className="btn btn-solid" onClick={next} disabled={saving}>
+            {saving ? "Saving…" : last ? "Finish setup" : "Next"}
           </button>
           {last && (
-            <button type="button" className="btn" onClick={() => finish(false)}>
+            <button type="button" className="btn" onClick={() => void finish(false)} disabled={saving}>
               Skip for now
             </button>
           )}
         </div>
         <div className="onboarding-shortcuts">
-          <button type="button" className="link-button" onClick={() => startDemo()}>
-            Try with sample data instead
-          </button>
           <Link href="/about">What is DineTrust?</Link>
         </div>
       </div>

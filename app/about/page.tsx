@@ -61,12 +61,12 @@ export default function About() {
               the details from your records.
             </li>
             <li>
-              Your bills, reservations, opening hours, phone and email are checked by plain code in this app. Your files
-              and settings are kept in your own browser.
+              Your bills, reservations, opening hours, phone and email are checked by plain code in this app. They are
+              saved in your restaurant&apos;s private database, and only you, once logged in, can read them.
             </li>
             <li>
-              To run a check, your records are sent to this app&apos;s own server, which does the comparison and does not
-              keep them.
+              To run a check, this app&apos;s server reads your records as you, does the comparison and sends nothing from
+              your records to the AI. Guests who leave feedback through your QR page reach only you.
             </li>
             <li>Your contact details are added to a reply only after the AI has written it.</li>
           </ul>
@@ -80,7 +80,7 @@ export default function About() {
       </div>
 
       <p className="footer-note">
-        AI-assisted – check before posting. <Link href="/">Back to the app</Link>
+        AI-assisted – check before posting. <Link href="/">Back to the home page</Link>
       </p>
     </div>
   );

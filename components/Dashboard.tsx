@@ -21,7 +21,7 @@ function Delta({ value, unit = "", invert = false }: { value: number | null; uni
 }
 
 export default function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
-  const { reviews, entries, entryOf, insights, insightsLoading, anchorDate, check, queue, hydrated, setTab } = useApp();
+  const { reviews, entries, entryOf, insights, insightsLoading, anchorDate, check, queue, hydrated, setTab, feedback } = useApp();
 
   if (!hydrated || (insightsLoading && !insights)) {
     return (
@@ -63,6 +63,20 @@ export default function Dashboard({ onOpen }: { onOpen: (id: string) => void }) 
       <p className="muted week-note">
         Showing the week ending {day(anchorDate)}, measured from your newest review.
       </p>
+
+      {feedback.length > 0 && (
+        <section className="panel fb-banner">
+          <p>
+            <strong>{feedback.filter((f) => f.status === "new").length} new</strong> guest feedback
+            {feedback.filter((f) => f.status === "new" && f.rating <= 3).length > 0 &&
+              ` (${feedback.filter((f) => f.status === "new" && f.rating <= 3).length} rated 1 to 3 stars)`}
+            . Sent privately by guests through your QR page.
+          </p>
+          <button type="button" className="btn btn-small" onClick={() => setTab("feedback")}>
+            Read guest feedback
+          </button>
+        </section>
+      )}
 
       <div className="card-grid">
         <section className="panel stat-card">

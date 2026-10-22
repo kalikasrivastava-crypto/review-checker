@@ -1,3 +1,4 @@
+import { hashString, stableStringify } from "./sig";
 import type { Hours } from "./records";
 
 export const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
@@ -208,4 +209,9 @@ export function normalizeSettings(raw: RestaurantSettings): RestaurantSettings {
     seatsPerTable: raw.seatsPerTable || DEFAULT_SEATS_PER_TABLE,
     mealMinutes: raw.mealMinutes || DEFAULT_MEAL_MINUTES,
   };
+}
+
+/** What a saved check was based on: the review, the restaurant's settings and how many times its records changed. */
+export function checkSignature(r: { text: string; rating: number; date: string }, settings: RestaurantSettings, recordsVersion: number): string {
+  return hashString(`${r.text}|${r.rating}|${r.date}|${recordsVersion}|${hashString(stableStringify(normalizeSettings(settings)))}`);
 }

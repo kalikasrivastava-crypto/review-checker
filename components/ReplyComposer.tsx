@@ -4,6 +4,7 @@ import { useState } from "react";
 import CopyButton from "./CopyButton";
 import { useApp, type Entry } from "./AppProvider";
 import { templateReply } from "@/lib/reply-templates";
+import { authedPost } from "@/lib/supabase-browser";
 import { contactText } from "@/lib/settings";
 import type { CheckResult, ReplyApproach, ReplyLanguage, ReplyResponse, ReplyStyle, ReviewItem } from "@/lib/types";
 import { riskLevel } from "@/lib/risk";
@@ -104,17 +105,13 @@ export default function ReplyComposer({
     try {
       // The free AI plan allows only a few calls a minute, so wait for our turn.
       await acquireAi();
-      const r = await fetch("/api/reply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          review: { id: review.id, author: review.author, rating: review.rating, date: review.date, text: review.text },
-          checks: result.checks,
-          approach,
-          language,
-          style,
-          contact,
-        }),
+      const r = await authedPost("/api/reply", {
+        review: { id: review.id, author: review.author, rating: review.rating, date: review.date, text: review.text },
+        checks: result.checks,
+        approach,
+        language,
+        style,
+        contact,
       });
       const data = (await r.json()) as ReplyResponse;
       if (data.ok) {

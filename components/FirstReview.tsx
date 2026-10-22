@@ -22,9 +22,13 @@ export default function FirstReview() {
   const [date, setDate] = useState("");
   const [author, setAuthor] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  function go(r: { text: string; rating: number; date: string; author: string; claims?: typeof EXAMPLE_REVIEW.claims }) {
-    const id = addReview(r, { check: true });
+  async function go(r: { text: string; rating: number; date: string; author: string; claims?: typeof EXAMPLE_REVIEW.claims }) {
+    setBusy(true);
+    const id = await addReview(r, { check: true });
+    setBusy(false);
+    if (!id) return;
     setTab("inbox");
     setSelectedId(id);
   }
@@ -34,7 +38,7 @@ export default function FirstReview() {
     if (!text.trim()) return setError("Paste a review first.");
     if (text.trim().length < MIN_CHARS) return setError("That's too short to check. Paste the whole review.");
     const usingExample = text.trim() === EXAMPLE_REVIEW.text;
-    go({
+    void go({
       text,
       rating: Number(rating),
       date: date || today(),
@@ -82,14 +86,15 @@ export default function FirstReview() {
         </label>
         {error && <p className="notice notice-error">{error}</p>}
         <div className="actions">
-          <button type="submit" className="btn btn-solid">
+          <button type="submit" className="btn btn-solid" disabled={busy}>
             Check this review
           </button>
           <button
             type="button"
             className="btn btn-primary"
+            disabled={busy}
             onClick={() =>
-              go({ text: EXAMPLE_REVIEW.text, rating: EXAMPLE_REVIEW.rating, date: today(), author: EXAMPLE_REVIEW.author, claims: EXAMPLE_REVIEW.claims })
+              void go({ text: EXAMPLE_REVIEW.text, rating: EXAMPLE_REVIEW.rating, date: today(), author: EXAMPLE_REVIEW.author, claims: EXAMPLE_REVIEW.claims })
             }
           >
             Use an example review

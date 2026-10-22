@@ -2,11 +2,9 @@
 
 import ColumnGuide from "./ColumnGuide";
 import UploadStep from "./UploadStep";
-import type { CustomRecords, Order, Reservation } from "@/lib/records";
+import type { Order, Reservation } from "@/lib/records";
 
 type Kind = "bills" | "reservations";
-
-const EMPTY: CustomRecords = { orders: null, ordersName: "", reservations: null, reservationsName: "" };
 
 const COPY: Record<Kind, { title: string; help: string; template: string; templateName: string }> = {
   bills: {
@@ -25,15 +23,15 @@ const COPY: Record<Kind, { title: string; help: string; template: string; templa
 
 interface Props {
   kind: Kind;
-  custom: CustomRecords | null;
-  onChange: (next: CustomRecords) => void;
+  /** How many rows are saved (or chosen) already, and from which file. */
+  count: number;
+  fileName: string;
+  onUse: (fileName: string, records: Order[] | Reservation[]) => void | Promise<void>;
 }
 
 /** One upload box with its template download, a column table, a preview and friendly errors. */
-export default function RecordsBox({ kind, custom, onChange }: Props) {
+export default function RecordsBox({ kind, count, fileName, onUse }: Props) {
   const c = COPY[kind];
-  const loaded = kind === "bills" ? custom?.orders : custom?.reservations;
-  const name = kind === "bills" ? custom?.ordersName : custom?.reservationsName;
   return (
     <section className="panel records-box">
       <div className="records-box-head">
@@ -44,21 +42,12 @@ export default function RecordsBox({ kind, custom, onChange }: Props) {
       </div>
       <p className="muted small">{c.help}</p>
       <ColumnGuide kind={kind} />
-      {loaded && (
+      {count > 0 && (
         <p className="notice notice-success">
-          ✓ {loaded.length.toLocaleString()} {kind === "bills" ? "bills" : "reservations"} loaded from {name}. Upload another file to replace them.
+          ✓ {count.toLocaleString()} {kind === "bills" ? "bills" : "reservations"} saved{fileName ? ` from ${fileName}` : ""}. Upload another file to replace them.
         </p>
       )}
-      <UploadStep
-        kind={kind}
-        onUse={(fileName, records) =>
-          onChange(
-            kind === "bills"
-              ? { ...(custom ?? EMPTY), orders: records as Order[], ordersName: fileName }
-              : { ...(custom ?? EMPTY), reservations: records as Reservation[], reservationsName: fileName },
-          )
-        }
-      />
+      <UploadStep kind={kind} onUse={onUse} />
     </section>
   );
 }

@@ -18,13 +18,23 @@ A daily tool for restaurant owners to tell fair bad Google reviews from suspicio
 
 A new visitor sees a welcome screen: a one-line headline, the three steps (add your records, pick a review, get a case report) and two buttons.
 
-- **Try with sample data** loads a made-up restaurant and opens Dan K.'s review with its case report already filled in from a saved result (no AI call). A four-step tour points at the risk level, the conflicting claims, the missing data and the next step, and can be skipped. A banner on every page says you are viewing sample data and links to setup.
-- **Set up my restaurant** is three short steps with a progress bar: details, hours and tables (sensible defaults pre-filled), then optional bills and reservations. Each upload box has a CSV template (`public/dinetrust-bills-template.csv`, `public/dinetrust-reservations-template.csv`), a column table, a preview of the first five rows and plain row errors such as "Row 7: time 'late' should look like 20:00". "Skip for now" is always there. After setup, "Check your first review" has a paste box and an **Use an example review** button that shows a result straight away.
+- **Try the demo** opens a private copy of a made-up restaurant and opens Dan K.'s review with its case report already filled in from a saved result (no AI call). A four-step tour points at the risk level, the conflicting claims, the missing data and the next step, and can be skipped. A banner on every page says you are viewing sample data and links to setup.
+- **Setting up your own restaurant** (after sign-up) is three short steps with a progress bar: details, hours and tables (sensible defaults pre-filled), then optional bills and reservations. Each upload box has a CSV template (`public/dinetrust-bills-template.csv`, `public/dinetrust-reservations-template.csv`), a column table, a preview of the first five rows and plain row errors such as "Row 7: time 'late' should look like 20:00". "Skip for now" is always there. After setup, "Check your first review" has a paste box and an **Use an example review** button that shows a result straight away.
 - The **?** button in the header reopens the tour, the templates, "What data do I need?" and a five-question FAQ.
 
-The sample reviews and the example review ship with their claims already pulled out (`lib/demo.ts`), so `/api/check` can skip the AI and run only the code checks.
+The sample reviews and the example review ship with their claims already pulled out (`lib/demo.ts` and the demo template in the database), so `/api/check` skips the AI and runs only the code checks.
 
-Everything you do is saved in your browser, so a refresh keeps your statuses, checks, drafts, records and settings.
+### Two interfaces, one database
+
+| Address | Who it is for | What it does |
+|---|---|---|
+| `/` | Everyone | A short landing page with two buttons: **I'm a restaurant owner** and **Try the demo**. |
+| `/restaurant` | Owners | Email and password login or sign-up (Supabase Auth), then the setup steps and everything above. A header shows "Owner area", the restaurant name and Log out. **Try demo** gives each visitor a private copy of the Demo Restaurant, with no sign-up. |
+| `/r/<restaurant>` | Guests | A friendly mobile page reached from a QR code: star rating, visit date and time, party size, optional bill number, comment, optional name and phone. A bill number that matches a real bill shows "Verified visit" (checked in the database; no bill detail is shown). 1 to 3 stars go privately to the owner's **Guest feedback** tab; 4 and 5 stars get a "Share on Google" button. |
+
+Owners find their guest page link, a printable QR poster, a preview button and a Google review link field under **My Restaurant → Your customer page**.
+
+**Data and privacy.** Everything lives in Supabase: restaurants, bills, reservations, reviews, case reports, replies and guest feedback. Row Level Security means each owner reads and writes only their own restaurant's rows; guests have no access to any table and can only call two small database functions (read a restaurant's name and Google link, and send feedback). The secret key is used only on the server, only to create demo accounts. A review's claims are saved with it, so the AI reads each review's text at most once. The AI never receives records or guest details. New feedback, reviews and checks appear on the dashboard and inbox instantly (Supabase Realtime).
 
 ### Free-tier friendly
 
@@ -104,7 +114,7 @@ The app is built for Gemini's free plan, which allows only a few AI calls a minu
 | Policy-safe reply | Plain code flags drafts that are too long or mention records, refunds, amounts, bill numbers, accusations or the reviewer's name. |
 | Failure handling | Empty, too-short or non-review text, a missing or rejected key, a busy or slow AI and unreadable AI output each show a plain message. No crash. |
 
-**Where the code lives:** the screens are in `components/` and `app/`; the API routes (`app/api/check`, `reply`, `insights`) call the AI; `lib/checks.ts` does the claim lookups and scoring; `lib/insights.ts` builds the dashboard data, footfall and look-alike pairs; `lib/settings.ts` holds the restaurant settings; `lib/pdf.ts` writes the PDF report; `components/AppProvider.tsx` holds the saved state and the AI queue.
+**Where the code lives:** (the owner screens now read and write Supabase through `components/AppProvider.tsx`) the screens are in `components/` and `app/`; the API routes (`app/api/check`, `reply`, `insights`) call the AI; `lib/checks.ts` does the claim lookups and scoring; `lib/insights.ts` builds the dashboard data, footfall and look-alike pairs; `lib/settings.ts` holds the restaurant settings; `lib/pdf.ts` writes the PDF report; `components/AppProvider.tsx` holds the saved state and the AI queue.
 
 ## Known limits
 
@@ -117,7 +127,7 @@ The app is built for Gemini's free plan, which allows only a few AI calls a minu
 
 ## Run it locally
 
-You need Node.js 20 or newer (LTS) and a Gemini API key from https://aistudio.google.com/apikey.
+You need Node.js 20 or newer (LTS), a Gemini API key from https://aistudio.google.com/apikey and a free Supabase project.
 
 ```bash
 git clone <this repo's URL>
@@ -126,28 +136,32 @@ npm install
 cp .env.example .env.local
 ```
 
-Open `.env.local` and paste your key after `GEMINI_API_KEY=` (no spaces or quotes). Optional settings: `GEMINI_MODEL` (default `gemini-3.6-flash`) and `GEMINI_FALLBACK_MODELS` (comma-separated, default `gemini-3.8-flash,gemini-3.5-flash-lite`, tried in order when a model's free quota is used up). Then:
+Open `.env.local` and fill in (no spaces or quotes): `GEMINI_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_SECRET_KEY` (the secret key has no `NEXT_PUBLIC_` prefix, so it never reaches the browser). Optional: `GEMINI_MODEL` (default `gemini-3.6-flash`) and `GEMINI_FALLBACK_MODELS`. Then:
 
 ```bash
 npm run dev
 ```
 
-Open http://localhost:3000 and choose "Try with sample data" or "Set up my restaurant". Restart `npm run dev` after changing `.env.local`.
+Open http://localhost:3000. Restart `npm run dev` after changing `.env.local`. The database tables, security rules and demo data are created by the SQL in `supabase/schema.sql`, then `supabase/seed.sql` (run each once in Supabase → SQL Editor).
 
-**On Vercel:** set `GEMINI_API_KEY` (and optionally the two model variables) under Project → Settings → Environment Variables, then redeploy.
+**On Vercel:** add the same four variables under Project → Settings → Environment Variables, then redeploy.
 
-`.env.local` is ignored by git. Never commit your key.
+`.env.local` is ignored by git. Never commit a key.
 
 ## Project layout
 
 ```
-app/page.tsx              the app shell: header, tabs, onboarding gate
+app/page.tsx              the landing page
+app/restaurant/page.tsx   the owner's area: login, setup, header, tabs
+app/r/[slug]/page.tsx     the guest feedback page opened from a QR code
 app/about/page.tsx        the About page
 app/api/check/route.ts    AI call 1: pull the claims out of the review. Code then checks them and scores the case
 app/api/reply/route.ts    AI call 2: draft a reply (language, tone, approach)
 app/api/insights/route.ts dashboard data, footfall, themes, look-alike reviews (no AI)
+app/api/demo/route.ts     makes a throwaway account for "Try demo" (needs the secret key)
 components/               Dashboard, Inbox, ReviewDetail, ReplyComposer, SettingsPanel, ...
 lib/                      ai, prompts, checks, similarity, insights, settings, records, pdf, store, ...
-data/                     reviews.json, orders.csv, reservations.csv (demo data)
+data/                     reviews.json, orders.csv, reservations.csv (the demo data the database was seeded from)
+supabase/schema.sql       tables, security rules, functions (for a fresh Supabase project)
 public/                   sample CSVs and the two CSV templates
 ```

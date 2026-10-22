@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import CustomerPageCard from "./CustomerPageCard";
 import RestaurantForm from "./RestaurantForm";
 import { useApp } from "./AppProvider";
-import { BLANK_SETTINGS, DEMO_SETTINGS, settingsIssues, type RestaurantSettings } from "@/lib/settings";
+import { BLANK_SETTINGS, settingsIssues, type RestaurantSettings } from "@/lib/settings";
 
 export default function SettingsPanel() {
-  const { settings, setSettings, toast, entries, startDemo } = useApp();
+  const { settings, saveSettings, toast, entries, resetDemo, isDemo } = useApp();
+  const [saving, setSaving] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [draft, setDraft] = useState<RestaurantSettings>(() => settings ?? BLANK_SETTINGS);
 
@@ -16,6 +18,7 @@ export default function SettingsPanel() {
 
   return (
     <div className="stack">
+      <CustomerPageCard />
       <RestaurantForm value={draft} onChange={setDraft} />
 
       {issues.length > 0 && (
@@ -34,25 +37,18 @@ export default function SettingsPanel() {
           <button
             type="button"
             className="btn btn-solid"
-            disabled={issues.length > 0 || !changed}
-            onClick={() => {
-              setSettings(draft);
-              toast("Restaurant details saved", "success");
+            disabled={issues.length > 0 || !changed || saving}
+            onClick={async () => {
+              setSaving(true);
+              const ok = await saveSettings(draft);
+              setSaving(false);
+              toast(ok ? "Restaurant details saved" : "Couldn't save. Try again.", ok ? "success" : "error");
             }}
           >
-            Save changes
-          </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => {
-              setDraft(DEMO_SETTINGS);
-              toast("Sample details filled in. Press Save to keep them.", "info");
-            }}
-          >
-            Fill in with the sample restaurant
+            {saving ? "Saving…" : "Save changes"}
           </button>
         </div>
+        {isDemo && (
         <div className="reset-box">
           {confirmReset ? (
             <>
@@ -65,8 +61,7 @@ export default function SettingsPanel() {
                   className="btn btn-small btn-danger"
                   onClick={async () => {
                     setConfirmReset(false);
-                    await startDemo({ tour: false });
-                    toast("Back to the sample data", "success");
+                    await resetDemo();
                   }}
                 >
                   Yes, reset to sample data
@@ -82,6 +77,7 @@ export default function SettingsPanel() {
             </button>
           )}
         </div>
+        )}
         {checkedCount > 0 && (
           <p className="muted small">
             You have {checkedCount} saved check{checkedCount === 1 ? "" : "s"}. If you change hours or capacity, they are

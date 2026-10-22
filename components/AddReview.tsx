@@ -21,12 +21,13 @@ export default function AddReview({ onAdded }: { onAdded: (id: string) => void }
   const [author, setAuthor] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!text.trim()) return setError("Paste a review first.");
     if (text.trim().length < MIN_CHARS) return setError("That's too short to check.");
     if (!date || Number.isNaN(new Date(date).getTime())) return setError("Add the date the review was posted.");
-    const id = addReview({ text, rating: Number(rating), date, author });
+    const id = await addReview({ text, rating: Number(rating), date, author });
+    if (!id) return;
     setText("");
     setAuthor("");
     setError(null);

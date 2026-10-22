@@ -24,10 +24,8 @@ export interface ReviewItem extends Review {
   id: string;
   author: string;
   source: "demo" | "added";
-  /** Which setup the review belongs to: the sample restaurant or the owner's own. */
-  workspace?: "demo" | "own";
-  /** Claims already pulled out (sample and example reviews), so checking it needs no AI call. */
-  claims?: Claim[];
+  /** True when the claims are already saved, so checking this review needs no AI call. */
+  hasClaims?: boolean;
 }
 
 export type ErrorCode = "no_key" | "busy" | "timeout" | "unavailable" | "refused" | "empty" | "bad_input" | "unreadable";
@@ -129,7 +127,7 @@ export interface CheckResult {
 }
 
 export type CheckResponse =
-  | { ok: true; result: CheckResult }
+  | { ok: true; result: CheckResult; sig?: string; checkedAt?: string }
   | { ok: false; error: string; code?: ErrorCode; notReview?: boolean };
 
 /** apology = genuine complaint; contact = can't confirm, so invite them to get in touch; factual = couldn't find the visit. */
