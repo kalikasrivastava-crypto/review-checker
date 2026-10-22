@@ -95,14 +95,16 @@ export default function AnalyseApp() {
     setBusy(null);
   }
 
-  async function onSample() {
-    setBusy({ name: "the sample data", stage: "checking", progress: 100 });
+  /** Loads built-in sample reviews through the same checks and analysis as an uploaded file. "quick" is five reviews; "full" is 150. */
+  async function onSample(which: "quick" | "full" = "full") {
+    const file = which === "quick" ? "sample-reviews-5.csv" : "sample-reviews.csv";
+    setBusy({ name: "the sample reviews", stage: "checking", progress: 100 });
     try {
-      const res = await fetch("/sample-reviews.csv");
+      const res = await fetch(`/${file}`);
       if (!res.ok) throw new Error("missing");
-      if (load("sample", "sample-reviews.csv", await res.text(), null)) setView("overview");
+      if (load("sample", file, await res.text(), null)) setView("overview");
     } catch {
-      fail("Couldn't load the sample data. Check your connection and try again.");
+      fail("Couldn't load the sample reviews. Check your connection and try again.");
     }
     setBusy(null);
   }
@@ -129,7 +131,7 @@ export default function AnalyseApp() {
   useEffect(() => {
     if (window.location.hash === "#sample" && !autoSample.current) {
       autoSample.current = true;
-      void Promise.resolve().then(onSample);
+      void Promise.resolve().then(() => onSample("full"));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -141,6 +143,7 @@ export default function AnalyseApp() {
 
   const isSample = source?.kind === "sample";
   const goUpload = () => setView("upload");
+  const loadFullSample = () => void onSample("full");
 
   return (
     <AppShell
@@ -175,11 +178,11 @@ export default function AnalyseApp() {
           isSample={isSample}
           activity={activity}
           onGo={setView}
-          onSample={onSample}
+          onSample={loadFullSample}
           onUseOwn={() => leave("Left the sample data")}
         />
       )}
-      {view === "themes" && <ThemesView analysis={analysis} isSample={isSample} onGo={goUpload} onSample={onSample} onUseOwn={() => leave("Left the sample data")} />}
+      {view === "themes" && <ThemesView analysis={analysis} isSample={isSample} onGo={goUpload} onSample={loadFullSample} onUseOwn={() => leave("Left the sample data")} />}
       {view === "plan" && (
         <ActionPlanView
           analysis={analysis}
@@ -188,7 +191,7 @@ export default function AnalyseApp() {
           ticks={ticks}
           onToggle={(key) => setTicks((t) => ({ ...t, [key]: !t[key] }))}
           onGo={goUpload}
-          onSample={onSample}
+          onSample={loadFullSample}
           onUseOwn={() => leave("Left the sample data")}
         />
       )}

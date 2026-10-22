@@ -32,7 +32,7 @@ interface Props {
   error: string | null;
   busy: Busy | null;
   onFile: (file: File) => void;
-  onSample: () => void;
+  onSample: (which: "quick" | "full") => void;
   onClear: () => void;
   onColumn: (field: keyof ReviewColumns, value: number | null) => void;
   onViewResults: () => void;
@@ -147,10 +147,15 @@ export default function UploadView({ source, parsed, error, busy, onFile, onSamp
         )}
 
         <div className="or-row">
-          <p>No file handy? Try the built-in sample data (made-up reviews).</p>
-          <button type="button" className="button button--secondary" onClick={onSample} disabled={!!busy}>
-            Use sample data
-          </button>
+          <p>No file handy? Try sample reviews. They are made up, not real customers.</p>
+          <div className="page-head__actions">
+            <button type="button" className="button button--primary" onClick={() => onSample("quick")} disabled={!!busy}>
+              Try with sample reviews
+            </button>
+            <button type="button" className="button button--secondary" onClick={() => onSample("full")} disabled={!!busy}>
+              Use the larger sample (150 reviews)
+            </button>
+          </div>
         </div>
       </section>
 

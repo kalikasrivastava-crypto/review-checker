@@ -91,6 +91,20 @@ check("sample: 'sticky table' sentences match the concern count", concernCount("
 check("sample: 'cold food' sentences match the concern count", concernCount("food", "Food served cold or lukewarm"), has("was cold when it reached our table"));
 check("sample: reviews with no theme", s.reviewsWithNoTheme, rows.filter((rw) => rw.text === "Hope they fix this.").length);
 
+// ---------- Part 2b: the five-review quick sample ----------
+const quick = fs.readFileSync(new URL("../public/sample-reviews-5.csv", import.meta.url), "utf8").trim().split(/\r?\n/).slice(1).map((l) => {
+  const m = /^(?:"((?:[^"]|"")*)"|([^,]*)),(\d),([^,]*),(.*)$/.exec(l);
+  return { text: (m[1] ?? m[2]).replace(/""/g, '"'), rating: Number(m[3]), date: m[4], reviewer: m[5] };
+});
+const q = analyseReviews(quick);
+const qt = (key) => q.themes.find((x) => x.key === key);
+check("quick sample: five reviews, all clearly labelled as sample reviewers", [quick.length, quick.every((r) => r.reviewer.startsWith("Sample reviewer"))], [5, true]);
+check("quick sample: slow service in 3 of 5 reviews, all negative", [qt("speed").reviews, qt("speed").negative, qt("speed").sentiment], [3, 3, "negative"]);
+check("quick sample: food 4 mentions (3 positive, 1 negative)", [qt("food").reviews, qt("food").positive, qt("food").negative], [4, 3, 1]);
+check("quick sample: pricing 1 negative, ambience 1 positive", [qt("price").negative, qt("ambience").positive], [1, 1]);
+check("quick sample: average rating is 13/5", q.averageRating, 13 / 5);
+check("quick sample: exactly one priority, Service speed, from 3 reviews", buildPriorities(q).priorities.map((x) => [x.label, x.concernedReviews]), [["Service speed", 3]]);
+
 // ---------- Part 3: priorities ----------
 // 19 reviews built so the answer is clear: 5 slow service, 4 cold food, 3 overpriced (+2 value praise), 3 noisy, 2 sticky tables.
 const many = (n, text, rating) => Array.from({ length: n }, (_, i) => r(i ? `${text} (visit ${i + 1})` : text, rating));
