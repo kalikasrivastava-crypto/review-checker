@@ -1,22 +1,25 @@
 import type { CheckResult } from "@/lib/types";
 
 export default function ScoreCard({ result }: { result: CheckResult }) {
-  const raised = result.risk !== result.aiRisk;
   return (
-    <section className="card">
-      <h2>
-        Risk: <span className={`risk risk-${result.risk}`}>{result.risk.toUpperCase()}</span>
-      </h2>
-      {raised && (
-        <p className="muted">
-          The AI rated this {result.aiRisk}; your records and recent reviews raised it to {result.risk}.
-        </p>
-      )}
-      <ul className="reasons">
-        {result.reasons.map((reason) => (
-          <li key={reason}>{reason}</li>
-        ))}
-      </ul>
+    <section className={`panel verdict-panel verdict-${result.verdict.toLowerCase()} fade-in`} aria-live="polite">
+      <div className="verdict-row">
+        <span className="stamp">{result.verdict}</span>
+        <div className="confidence">
+          Confidence {result.confidence}%
+          <div
+            className="confidence-bar"
+            role="progressbar"
+            aria-label="Confidence"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={result.confidence}
+          >
+            <span style={{ width: `${result.confidence}%` }} />
+          </div>
+        </div>
+      </div>
+      <p className="summary">{result.summary}</p>
     </section>
   );
 }

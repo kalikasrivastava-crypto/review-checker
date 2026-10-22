@@ -1,6 +1,13 @@
-export type Risk = "low" | "medium" | "high";
-export type ClaimType = "party_size" | "date_time" | "wait_time" | "item_ordered" | "other";
-export type Status = "match" | "mismatch" | "no_data";
+export type Verdict = "Verified" | "Plausible" | "Suspicious" | "Unverifiable";
+export type ClaimType =
+  | "party_size"
+  | "date_time"
+  | "wait_time"
+  | "item_ordered"
+  | "reservation"
+  | "bill"
+  | "other";
+export type Status = "match" | "mismatch" | "no_record";
 
 export interface Review {
   id?: string;
@@ -17,33 +24,39 @@ export interface Claim {
   weekday: string | null;
   date: string | null; // YYYY-MM-DD, only if the review states an exact date
   time: string | null; // HH:MM, 24 hour
+  item: string | null; // dish named in an item_ordered claim
 }
 
+/** What the AI returns. It never sees the restaurant's records. */
 export interface AiReading {
   is_review: boolean;
-  risk: Risk;
-  reasons: string[];
+  verdict: "Plausible" | "Suspicious" | "Unverifiable";
+  confidence: number; // 0-100
+  summary: string;
   claims: Claim[];
 }
 
-export interface Evidence {
+export interface Check {
   claim: string;
-  type: ClaimType;
+  record: string;
   status: Status;
-  note: string;
 }
 
 export interface CheckResult {
-  risk: Risk;
-  aiRisk: Risk;
-  reasons: string[];
+  verdict: Verdict;
+  confidence: number; // 0-100
+  summary: string;
+  checks: Check[];
   burst: boolean;
-  evidence: Evidence[];
+  aiVerdict: AiReading["verdict"];
 }
 
 export type CheckResponse =
   | { ok: true; result: CheckResult }
   | { ok: false; error: string; notReview?: boolean };
+
+/** apology = genuine complaint (apology plus a fix); factual = can't verify it (polite, no admissions). */
+export type ReplyTone = "apology" | "factual";
 
 export type ReplyResponse =
   | { ok: true; reply: string; warning?: string }

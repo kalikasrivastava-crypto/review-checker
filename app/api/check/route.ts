@@ -1,11 +1,23 @@
-import { askAI, AiError, aiErrorMessage } from "@/lib/ai";
-import { checkClaim, finalRisk, isBurst } from "@/lib/checks";
+import { aiErrorMessage, AiError, askAI } from "@/lib/ai";
+import { buildChecks, isBurst, settleVerdict } from "@/lib/checks";
+import { loadDefaultRecords } from "@/lib/records-default";
+import { sanitizeUploaded, type Records } from "@/lib/records";
 import { SCORE_SYSTEM, scoreUser } from "@/lib/prompts";
 import { parseAiReading, validateReviewInput } from "@/lib/validate";
 import type { AiReading, CheckResponse } from "@/lib/types";
 
 function reply(body: CheckResponse, status = 200) {
   return Response.json(body, { status });
+}
+
+/**
+ * The owner's own upload if there is one, otherwise the demo dataset. With an upload, a file that was
+ * not provided counts as "no records" rather than falling back to demo data.
+ */
+function recordsFor(input: unknown): Records {
+  const base = loadDefaultRecords();
+  const custom = sanitizeUploaded((input as { records?: unknown } | null)?.records);
+  return custom ? { ...base, orders: custom.orders, reservations: custom.reservations } : base;
 }
 
 export async function POST(request: Request) {
@@ -37,24 +49,13 @@ export async function POST(request: Request) {
     return reply({ ok: false, notReview: true, error: "This doesn't look like a review." });
   }
 
-  // Plain code from here: look up claims, apply the burst rule, settle the risk.
-  const reviewDate = new Date(review.date);
-  const evidence = reading.claims.map((c) => checkClaim(c, reviewDate));
-  const mismatches = evidence.filter((e) => e.status === "mismatch").length;
+  // Plain code from here: check claims against the records, apply the burst rule, settle the verdict.
+  const checks = buildChecks(reading.claims, new Date(review.date), recordsFor(input));
   const burst = isBurst(review);
-  const risk = finalRisk(reading.risk, mismatches, burst);
-
-  const reasons: string[] = [];
-  if (mismatches > 0) {
-    reasons.push(
-      `${mismatches === 1 ? "A claim doesn't" : `${mismatches} claims don't`} match your records.`,
-    );
-  }
-  if (burst) reasons.push("3 or more one-star reviews were posted within 24 hours.");
-  reasons.push(...reading.reasons);
+  const settled = settleVerdict(reading, checks, burst);
 
   return reply({
     ok: true,
-    result: { risk, aiRisk: reading.risk, reasons: reasons.slice(0, 3), burst, evidence },
+    result: { ...settled, checks, burst, aiVerdict: reading.verdict },
   });
 }

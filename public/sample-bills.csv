@@ -1,0 +1,26 @@
+bill_id,date,time,party_size,items
+B1001,2026-10-13,17:30,2,bruschetta (appetizer); margherita pizza
+B1002,2026-10-13,18:15,4,calamari (appetizer); lasagna; tiramisu
+B1003,2026-10-13,19:00,2,caesar salad; ribeye steak; tiramisu
+B1004,2026-10-13,19:45,3,minestrone soup; chicken piccata; risotto
+B1005,2026-10-13,20:30,2,seafood linguine; panna cotta
+B1006,2026-10-15,17:45,2,burrata (appetizer); gnocchi
+B1007,2026-10-15,18:30,4,bruschetta (appetizer); calamari (appetizer); lasagna; chicken piccata
+B1008,2026-10-15,19:15,2,caesar salad; salmon
+B1009,2026-10-15,20:00,6,antipasto platter (appetizer); margherita pizza; seafood linguine; tiramisu
+B1010,2026-10-15,20:45,2,risotto; panna cotta
+B1011,2026-10-16,18:00,2,burrata (appetizer); ribeye steak
+B1012,2026-10-16,19:00,4,calamari (appetizer); lasagna; gnocchi; salmon
+B1013,2026-10-16,19:30,5,antipasto platter (appetizer); pizza; chicken piccata; tiramisu
+B1014,2026-10-16,20:15,2,caesar salad; seafood linguine
+B1015,2026-10-16,21:00,3,minestrone soup; ribeye steak; risotto
+B1016,2026-10-16,21:45,2,gnocchi; panna cotta
+B1017,2026-10-17,17:30,2,bruschetta (appetizer); salmon
+B1018,2026-10-17,18:45,4,calamari (appetizer); lasagna; ribeye steak; tiramisu
+B1019,2026-10-17,19:30,2,burrata (appetizer); seafood linguine
+B1020,2026-10-17,20:30,6,antipasto platter (appetizer); pizza; gnocchi; chicken piccata; panna cotta
+B1021,2026-10-17,21:15,2,caesar salad; risotto
+B1022,2026-10-18,17:00,2,bruschetta (appetizer); lasagna
+B1023,2026-10-18,18:00,3,minestrone soup; chicken piccata; ribeye steak
+B1024,2026-10-18,19:00,4,calamari (appetizer); pizza; salmon; tiramisu
+B1025,2026-10-18,20:00,2,gnocchi; panna cotta

@@ -1,8 +1,16 @@
-import type { AiReading, Claim, ClaimType, Review, Risk } from "./types";
+import type { AiReading, Claim, ClaimType, Review } from "./types";
 
 export const MIN_REVIEW_CHARS = 20;
-const RISKS: Risk[] = ["low", "medium", "high"];
-const CLAIM_TYPES: ClaimType[] = ["party_size", "date_time", "wait_time", "item_ordered", "other"];
+const VERDICTS = ["Plausible", "Suspicious", "Unverifiable"] as const;
+const CLAIM_TYPES: ClaimType[] = [
+  "party_size",
+  "date_time",
+  "wait_time",
+  "item_ordered",
+  "reservation",
+  "bill",
+  "other",
+];
 
 /** Checks what the owner typed, before the AI is called. Returns an error message or the clean review. */
 export function validateReviewInput(input: unknown): { error: string } | { review: Review } {
@@ -20,7 +28,8 @@ export function validateReviewInput(input: unknown): { error: string } | { revie
     return { error: "Add the date the review was posted." };
   }
   const id = typeof body.id === "string" ? body.id : undefined;
-  return { review: { id, rating, date, text } };
+  const author = typeof body.author === "string" && body.author.trim() ? body.author.trim() : undefined;
+  return { review: { id, rating, date, text, author } };
 }
 
 function str(v: unknown): string | null {
@@ -39,10 +48,13 @@ export function parseAiReading(raw: string): AiReading | null {
     return null;
   }
   if (typeof data.is_review !== "boolean") return null;
-  if (!RISKS.includes(data.risk as Risk)) return null;
-  if (!Array.isArray(data.reasons) || !Array.isArray(data.claims)) return null;
+  // The AI never sees the records, so it can't confirm anything: treat "Verified" as "Plausible".
+  const verdictRaw = data.verdict === "Verified" ? "Plausible" : data.verdict;
+  if (!VERDICTS.includes(verdictRaw as (typeof VERDICTS)[number])) return null;
+  const confidence = Number(data.confidence);
+  if (!Number.isFinite(confidence)) return null;
+  if (!Array.isArray(data.claims)) return null;
 
-  const reasons = data.reasons.filter((r): r is string => typeof r === "string" && !!r.trim()).slice(0, 3);
   const claims: Claim[] = [];
   for (const c of data.claims as Record<string, unknown>[]) {
     if (!c || typeof c.text !== "string" || !CLAIM_TYPES.includes(c.type as ClaimType)) return null;
@@ -53,7 +65,14 @@ export function parseAiReading(raw: string): AiReading | null {
       weekday: str(c.weekday)?.toLowerCase() ?? null,
       date: str(c.date),
       time: str(c.time),
+      item: str(c.item),
     });
   }
-  return { is_review: data.is_review, risk: data.risk as Risk, reasons, claims };
+  return {
+    is_review: data.is_review,
+    verdict: verdictRaw as AiReading["verdict"],
+    confidence: Math.max(0, Math.min(100, confidence)),
+    summary: typeof data.summary === "string" ? data.summary.trim() : "",
+    claims,
+  };
 }
