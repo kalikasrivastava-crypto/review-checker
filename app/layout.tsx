@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Geist, Noto_Sans_Devanagari } from "next/font/google";
 import "./globals.css";
+import "./ui.css";
 
 const fraunces = Fraunces({
   variable: "--font-serif",
@@ -22,8 +23,8 @@ const geist = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "DineTrust",
-  description: "Check a suspicious Google review against your own records",
+  title: "DineTrust · Customer feedback insights for restaurants",
+  description: "Upload your customer reviews, see the themes that keep coming up, and get practical next steps.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

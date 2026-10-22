@@ -1,344 +1,197 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import AnalysisResults from "./AnalysisResults";
+import ActionPlanView from "./dashboard/ActionPlanView";
+import AppShell, { type View } from "./dashboard/AppShell";
+import OverviewView, { type ActivityItem } from "./dashboard/OverviewView";
+import ThemesView from "./dashboard/ThemesView";
+import UploadView, { type Busy, type UploadSource } from "./dashboard/UploadView";
 import { analyseReviews } from "@/lib/analysis";
-import {
-  buildReviews,
-  MAX_FILE_BYTES,
-  MAX_REVIEWS,
-  readReviewFile,
-  type ReviewColumns,
-} from "@/lib/review-csv";
+import { buildPriorities } from "@/lib/priorities";
+import { readTextWithProgress } from "@/lib/read-file";
+import { buildReviews, MAX_FILE_BYTES, MAX_REVIEWS, readReviewFile, type ReviewColumns } from "@/lib/review-csv";
+import { fileSize, plural } from "@/lib/format";
 
-interface Source {
-  kind: "sample" | "upload";
-  name: string;
-  headers: string[];
+interface Source extends UploadSource {
   rows: string[][];
-  columns: ReviewColumns;
 }
 
-const FIELDS: { field: keyof ReviewColumns; label: string }[] = [
-  { field: "text", label: "Review text (required)" },
-  { field: "rating", label: "Rating (optional)" },
-  { field: "date", label: "Date (optional)" },
-  { field: "reviewer", label: "Reviewer name (optional)" },
-];
+const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const niceDate = (iso: string) => `${Number(iso.slice(8, 10))} ${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}`;
-const were = (n: number) => (n === 1 ? "was" : "were");
-const have = (n: number) => (n === 1 ? "has" : "have");
-const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
-
+/** The dashboard: upload reviews, then see the overview, themes and action plan. Everything happens in the browser. */
 export default function AnalyseApp() {
   const [source, setSource] = useState<Source | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [reading, setReading] = useState(false);
-  const summaryRef = useRef<HTMLElement>(null);
+  const [view, setView] = useState<View>("upload");
+  const [busy, setBusy] = useState<Busy | null>(null);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [ticks, setTicks] = useState<Record<string, boolean>>({});
+  const activityId = useRef(0);
+  const autoSample = useRef(false);
 
-  const result = useMemo(
-    () => (source && source.columns.text !== undefined ? buildReviews(source.rows, source.columns) : null),
-    [source],
-  );
+  const parsed = useMemo(() => (source && source.columns.text !== undefined ? buildReviews(source.rows, source.columns) : null), [source]);
+  const analysis = useMemo(() => (parsed && parsed.reviews.length > 0 ? analyseReviews(parsed.reviews) : null), [parsed]);
+  const priorities = useMemo(() => (analysis ? buildPriorities(analysis) : null), [analysis]);
 
-  function load(kind: Source["kind"], name: string, text: string) {
+  function log(text: string) {
+    const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    setActivity((prev) => [{ id: ++activityId.current, time, text }, ...prev].slice(0, 8));
+  }
+
+  function fail(message: string, note?: string) {
+    setError(message);
+    log(note ?? message);
+  }
+
+  /** Reads the text of a CSV into rows and checks it. Returns true when the reviews were loaded. */
+  function load(kind: Source["kind"], name: string, text: string, size: number | null): boolean {
     const file = readReviewFile(text);
     if (file.headers.length === 0 || file.rows.length === 0) {
-      setError("That file has no reviews in it. It needs a header row and at least one review underneath.");
-      return;
+      fail("That file has no reviews in it. It needs a header row and at least one review underneath.", `Couldn't use ${name}: no reviews found`);
+      return false;
     }
     if (file.rows.length > MAX_REVIEWS) {
-      setError(`That file has ${file.rows.length.toLocaleString()} rows. The limit is ${MAX_REVIEWS.toLocaleString()}. Try a shorter date range.`);
-      return;
+      fail(
+        `That file has ${file.rows.length.toLocaleString()} rows. The limit is ${MAX_REVIEWS.toLocaleString()}. Try a shorter date range.`,
+        `Couldn't use ${name}: ${file.rows.length.toLocaleString()} rows is over the limit`,
+      );
+      return false;
     }
     setError(null);
-    setSource({ kind, name, headers: file.headers, rows: file.rows, columns: file.guess });
+    setSource({ kind, name, size, headers: file.headers, rows: file.rows, columns: file.guess });
+    setTicks({});
+    if (file.guess.text === undefined) log(`Read ${name}: choose which column holds the review text`);
+    else {
+      const { summary } = buildReviews(file.rows, file.guess);
+      log(kind === "sample" ? `Loaded the sample data (${plural(summary.used, "made-up review")})` : `Read ${name}: ${plural(summary.rowsRead, "row")}, ${plural(summary.used, "review")} used`);
+    }
+    return true;
   }
 
-  async function onFile(file: File | undefined) {
-    if (!file) return;
-    if (file.size > MAX_FILE_BYTES) {
-      setError(`That file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. The limit is 3 MB. Try a shorter date range.`);
+  async function onFile(file: File) {
+    if (!/\.(csv|txt)$/i.test(file.name) && !/csv|text\/plain/i.test(file.type)) {
+      fail(
+        "That doesn't look like a CSV file. In Excel or Google Sheets, choose File, then Save as or Download, then CSV.",
+        `Couldn't use ${file.name}: not a CSV file`,
+      );
       return;
     }
-    setReading(true);
-    try {
-      load("upload", file.name, await file.text());
-    } catch {
-      setError("Couldn't read that file. Is it a CSV?");
+    if (file.size > MAX_FILE_BYTES) {
+      fail(
+        `That file is ${fileSize(file.size)}. The limit is ${fileSize(MAX_FILE_BYTES)}. Try a shorter date range.`,
+        `Couldn't use ${file.name}: ${fileSize(file.size)} is over the limit`,
+      );
+      return;
     }
-    setReading(false);
+    setBusy({ name: file.name, stage: "reading", progress: 0 });
+    try {
+      const text = await readTextWithProgress(file, (progress) => setBusy({ name: file.name, stage: "reading", progress }));
+      setBusy({ name: file.name, stage: "checking", progress: 100 });
+      await nextFrame();
+      if (load("upload", file.name, text, file.size)) setView("upload");
+    } catch {
+      fail("Couldn't read that file. Is it a CSV?", `Couldn't read ${file.name}`);
+    }
+    setBusy(null);
   }
 
-  async function loadSample() {
-    setLoading(true);
+  async function onSample() {
+    setBusy({ name: "the sample data", stage: "checking", progress: 100 });
     try {
       const res = await fetch("/sample-reviews.csv");
       if (!res.ok) throw new Error("missing");
-      load("sample", "sample-reviews.csv", await res.text());
+      if (load("sample", "sample-reviews.csv", await res.text(), null)) setView("overview");
     } catch {
-      setError("Couldn't load the sample data. Check your connection and try again.");
+      fail("Couldn't load the sample data. Check your connection and try again.");
     }
-    setLoading(false);
+    setBusy(null);
   }
 
-  const analysis = useMemo(() => (result && result.reviews.length > 0 ? analyseReviews(result.reviews) : null), [result]);
+  function onColumn(field: keyof ReviewColumns, value: number | null) {
+    setSource((cur) => {
+      if (!cur) return cur;
+      const next = { ...cur.columns };
+      if (value === null) delete next[field];
+      else next[field] = value;
+      return { ...cur, columns: next };
+    });
+  }
+
+  function leave(message: string) {
+    setSource(null);
+    setError(null);
+    setTicks({});
+    setView("upload");
+    log(message);
+  }
+
   // The home page links here with #sample to open the sample data straight away.
   useEffect(() => {
-    if (window.location.hash === "#sample") void Promise.resolve().then(loadSample);
+    if (window.location.hash === "#sample" && !autoSample.current) {
+      autoSample.current = true;
+      void Promise.resolve().then(onSample);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // When results appear for a new file, bring them into view (not when the columns are changed by hand).
-  const sourceKey = source ? `${source.kind}:${source.name}` : "";
+  // Each new screen starts at the top.
   useEffect(() => {
-    if (sourceKey) summaryRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [sourceKey]);
+    window.scrollTo({ top: 0 });
+  }, [view]);
 
-  const s = result?.summary;
-  const withRating = s ? s.used - s.ratingMissing - s.ratingUnreadable : 0;
-  const textMissing = !!source && source.columns.text === undefined;
+  const isSample = source?.kind === "sample";
+  const goUpload = () => setView("upload");
 
   return (
-    <div className="stack">
-      <section className="panel">
-        <h2>Add your reviews</h2>
-        <p className="muted small">
-          Upload a CSV file with one review per row. Only the review text is needed. A rating, a date and a reviewer name make the
-          results richer.
-        </p>
-        <div className="table-scroll">
-          <table className="column-guide">
-            <thead>
-              <tr>
-                <th scope="col">Column name</th>
-                <th scope="col">What it means</th>
-                <th scope="col">Example</th>
-                <th scope="col">Needed?</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <code>review_text</code>
-                </td>
-                <td>The full review</td>
-                <td>Food was cold and service was slow</td>
-                <td>
-                  <span className="req">required</span>
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  <code>rating</code>
-                </td>
-                <td>Stars, 1 to 5</td>
-                <td>2</td>
-                <td>
-                  <span className="req req-opt">optional</span>
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  <code>date</code>
-                </td>
-                <td>When it was posted</td>
-                <td>2026-10-17</td>
-                <td>
-                  <span className="req req-opt">optional</span>
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  <code>reviewer</code>
-                </td>
-                <td>Who wrote it</td>
-                <td>Asha K.</td>
-                <td>
-                  <span className="req req-opt">optional</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <label className="field">
-          Upload your reviews file (CSV)
-          <input
-            type="file"
-            accept=".csv,text/csv"
-            disabled={reading}
-            onChange={async (e) => {
-              const input = e.currentTarget;
-              await onFile(input.files?.[0]);
-              input.value = ""; // so the same file can be chosen again
-            }}
-          />
-        </label>
-        <div className="actions">
-          <button type="button" className="btn btn-primary" onClick={loadSample} disabled={loading || reading}>
-            {loading ? "Loading…" : "Use the sample data"}
-          </button>
-          <a className="btn btn-small" href="/dinetrust-reviews-template.csv" download>
-            Download CSV template
-          </a>
-        </div>
-        {reading && (
-          <p className="muted small" role="status">
-            Reading your file…
-          </p>
-        )}
-        <p className="muted small">Your file is read in your browser. It isn&apos;t uploaded or saved anywhere.</p>
-        {error && (
-          <p className="notice notice-error" role="alert">
-            {error}
-            {source && " Your earlier results are still shown below."}
-          </p>
-        )}
-      </section>
-
-      {source && (
-        <section className="panel" ref={summaryRef}>
-          <h2>What we read</h2>
-          {source.kind === "sample" && (
-            <p className="notice notice-warning sample-banner">
-              <strong>Sample data.</strong> {s ? plural(s.used, "made-up review") : "Made-up reviews"}, not from a real restaurant. Everything
-              below is only here to show how DineTrust works.
-            </p>
-          )}
-          <p className="muted small">
-            Source: {source.kind === "sample" ? "built-in sample data" : `your file, ${source.name}`}
-          </p>
-
-          <details className="mapping-details" open={textMissing}>
-            <summary>{textMissing ? "Tell us which column holds the review text" : "Columns matched. Change them if something looks wrong"}</summary>
-            <div className="mapping-grid">
-              {FIELDS.map(({ field, label }) => (
-                <label className="field" key={field}>
-                  {label}
-                  <select
-                    value={source.columns[field] ?? ""}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setSource((cur) => {
-                        if (!cur) return cur;
-                        const next = { ...cur.columns };
-                        if (v === "") delete next[field];
-                        else next[field] = Number(v);
-                        return { ...cur, columns: next };
-                      });
-                    }}
-                  >
-                    <option value="">— none —</option>
-                    {source.headers.map((h, i) => (
-                      <option key={i} value={i}>
-                        {h || `Column ${i + 1}`}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ))}
-            </div>
-          </details>
-
-          {textMissing && (
-            <p className="notice notice-warning">We couldn&apos;t tell which column holds the review text. Pick it above to continue.</p>
-          )}
-
-          {s && (
-            <>
-              <dl className="dq-list">
-                <div>
-                  <dt>Rows read</dt>
-                  <dd>{s.rowsRead.toLocaleString()}</dd>
-                </div>
-                <div className="dq-main">
-                  <dt>Reviews used</dt>
-                  <dd>{s.used.toLocaleString()}</dd>
-                </div>
-                {s.dateFrom && s.dateTo && (
-                  <div>
-                    <dt>Dates covered</dt>
-                    <dd>
-                      {niceDate(s.dateFrom)} to {niceDate(s.dateTo)}
-                    </dd>
-                  </div>
-                )}
-                <div>
-                  <dt>With a rating</dt>
-                  <dd>{withRating.toLocaleString()}</dd>
-                </div>
-              </dl>
-
-              {s.used === 0 && (
-                <p className="notice notice-warning">None of the rows could be used as reviews. Check that the right column is picked above.</p>
-              )}
-
-              {(s.skippedEmpty > 0 || s.skippedShort > 0 || s.duplicates > 0 || s.ratingMissing + s.ratingUnreadable > 0 || s.dateMissing + s.dateUnreadable > 0) && (
-                <div className="notice notice-warning">
-                  <strong>Things we skipped or ignored:</strong>
-                  <ul className="issue-list">
-                    {s.skippedEmpty > 0 && <li>{plural(s.skippedEmpty, "row")} with no review text {were(s.skippedEmpty)} skipped.</li>}
-                    {s.skippedShort > 0 && <li>{plural(s.skippedShort, "review")} too short to say anything (under 10 letters) {were(s.skippedShort)} skipped.</li>}
-                    {s.duplicates > 0 && <li>{plural(s.duplicates, "duplicate")} of a review already counted {were(s.duplicates)} removed.</li>}
-                    {s.ratingMissing > 0 && <li>{plural(s.ratingMissing, "review")} {have(s.ratingMissing)} no rating.</li>}
-                    {s.ratingUnreadable > 0 && <li>{plural(s.ratingUnreadable, "rating")} couldn&apos;t be read (use a number from 1 to 5), so {s.ratingUnreadable === 1 ? "it is" : "they are"} ignored.</li>}
-                    {s.dateMissing > 0 && <li>{plural(s.dateMissing, "review")} {have(s.dateMissing)} no date.</li>}
-                    {s.dateUnreadable > 0 && <li>{plural(s.dateUnreadable, "date")} couldn&apos;t be read (try 2026-10-17), so {s.dateUnreadable === 1 ? "it is" : "they are"} ignored.</li>}
-                  </ul>
-                </div>
-              )}
-
-              {result && result.reviews.length > 0 && (
-                <>
-                  <p className="muted small">The first {Math.min(5, result.reviews.length)} reviews we will analyse:</p>
-                  <div className="table-scroll">
-                    <table className="column-guide">
-                      <thead>
-                        <tr>
-                          <th scope="col">Rating</th>
-                          <th scope="col">Date</th>
-                          <th scope="col">Review</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {result.reviews.slice(0, 5).map((r, i) => (
-                          <tr key={i}>
-                            <td>{r.rating ?? "–"}</td>
-                            <td>{r.date ? niceDate(r.date) : "–"}</td>
-                            <td>{r.text.length > 140 ? `${r.text.slice(0, 140)}…` : r.text}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
-            </>
-          )}
-
-          <div className="actions">
-            <button
-              type="button"
-              className="btn btn-small"
-              onClick={() => {
-                setSource(null);
-                setError(null);
-              }}
-            >
-              Start over with a different file
-            </button>
-          </div>
-        </section>
-      )}
-
+    <AppShell
+      view={view}
+      onNavigate={setView}
+      source={source && parsed ? { kind: source.kind, name: source.name, reviews: parsed.summary.used } : null}
+      themeCount={analysis ? analysis.themes.filter((t) => t.reviews > 0).length : null}
+      planCount={priorities ? priorities.priorities.length : null}
+    >
       <p className="sr-only" role="status">
         {analysis ? `Analysis ready for ${analysis.reviewCount} reviews.` : ""}
       </p>
 
-      {source && analysis && <AnalysisResults analysis={analysis} isSample={source.kind === "sample"} />}
-    </div>
+      {view === "upload" && (
+        <UploadView
+          source={source}
+          parsed={parsed}
+          error={error}
+          busy={busy}
+          onFile={onFile}
+          onSample={onSample}
+          onClear={() => leave("Cleared the loaded reviews")}
+          onColumn={onColumn}
+          onViewResults={() => setView("overview")}
+        />
+      )}
+      {view === "overview" && (
+        <OverviewView
+          analysis={analysis}
+          priorities={priorities}
+          summary={parsed?.summary ?? null}
+          isSample={isSample}
+          activity={activity}
+          onGo={setView}
+          onSample={onSample}
+          onUseOwn={() => leave("Left the sample data")}
+        />
+      )}
+      {view === "themes" && <ThemesView analysis={analysis} isSample={isSample} onGo={goUpload} onSample={onSample} onUseOwn={() => leave("Left the sample data")} />}
+      {view === "plan" && (
+        <ActionPlanView
+          analysis={analysis}
+          priorities={priorities}
+          isSample={isSample}
+          ticks={ticks}
+          onToggle={(key) => setTicks((t) => ({ ...t, [key]: !t[key] }))}
+          onGo={goUpload}
+          onSample={onSample}
+          onUseOwn={() => leave("Left the sample data")}
+        />
+      )}
+    </AppShell>
   );
 }
