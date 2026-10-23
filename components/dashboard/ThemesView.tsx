@@ -22,12 +22,13 @@ interface Props {
   analysis: AnalysisResult | null;
   isSample: boolean;
   method: AnalysisMethod;
+  saved: boolean;
   onGo: (view: "upload") => void;
   onSample: () => void;
   onUseOwn: () => void;
 }
 
-export default function ThemesView({ method, analysis, isSample, onGo, onSample, onUseOwn }: Props) {
+export default function ThemesView({ method, saved, analysis, isSample, onGo, onSample, onUseOwn }: Props) {
   const [filter, setFilter] = useState<Filter>("all");
 
   if (!analysis) {
@@ -64,7 +65,7 @@ export default function ThemesView({ method, analysis, isSample, onGo, onSample,
 
       {isSample && <SampleBar count={analysis.reviewCount} onUseOwn={onUseOwn} />}
 
-      <MethodBar method={method} />
+      <MethodBar method={method} saved={saved} />
 
       <div className="segmented" role="group" aria-label="Filter themes by sentiment">
         {FILTERS.map((f) => (

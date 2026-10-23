@@ -14,6 +14,7 @@ interface Props {
   priorities: PrioritiesResult | null;
   isSample: boolean;
   method: AnalysisMethod;
+  saved: boolean;
   ticks: Record<string, boolean>;
   onToggle: (key: string) => void;
   onGo: (view: "upload") => void;
@@ -21,7 +22,7 @@ interface Props {
   onUseOwn: () => void;
 }
 
-export default function ActionPlanView({ method, analysis, priorities, isSample, ticks, onToggle, onGo, onSample, onUseOwn }: Props) {
+export default function ActionPlanView({ method, saved, analysis, priorities, isSample, ticks, onToggle, onGo, onSample, onUseOwn }: Props) {
   if (!analysis || !priorities) {
     return (
       <div className="stack-16">
@@ -51,7 +52,7 @@ export default function ActionPlanView({ method, analysis, priorities, isSample,
 
       {isSample && <SampleBar count={analysis.reviewCount} onUseOwn={onUseOwn} />}
 
-      <MethodBar method={method} />
+      <MethodBar method={method} saved={saved} />
 
       {priorities.smallSample && (
         <div className="alert alert--warning">

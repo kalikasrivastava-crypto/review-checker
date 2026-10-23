@@ -8,8 +8,8 @@ import { pathToFileURL } from "node:url";
 
 // Node's TypeScript loader needs file extensions on imports, so run the checks on a scratch copy of the files.
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ai-analysis-check-"));
-for (const f of ["analysis", "ai-analysis", "priorities"]) {
-  const src = fs.readFileSync(new URL(`../lib/${f}.ts`, import.meta.url), "utf8").replace(/from "\.\/(analysis|review-csv)"/g, 'from "./$1.ts"');
+for (const f of ["analysis", "ai-analysis", "priorities", "summary-row"]) {
+  const src = fs.readFileSync(new URL(`../lib/${f}.ts`, import.meta.url), "utf8").replace(/from "\.\/(analysis|review-csv|priorities)"/g, 'from "./$1.ts"');
   fs.writeFileSync(path.join(dir, `${f}.ts`), src);
 }
 fs.writeFileSync(path.join(dir, "review-csv.ts"), "export {};\n");
@@ -17,6 +17,7 @@ const load = (f) => import(pathToFileURL(path.join(dir, `${f}.ts`)).href);
 const ai = await load("ai-analysis");
 const { buildPriorities } = await load("priorities");
 const { analyseReviews } = await load("analysis");
+const { buildSummaryRow } = await load("summary-row");
 
 let failures = 0;
 const check = (name, actual, expected) => {
@@ -118,6 +119,17 @@ check("priorities: the ranking is the same with or without AI steps", withAi.pri
 check("priorities: cleanliness is the top priority from the counts", plain.priorities[0].key, "clean");
 check("priorities: AI steps replace the ready-made ones and the records check stays last", [withAi.priorities[0].steps.length, withAi.priorities[0].steps[0], withAi.priorities[0].steps.at(-1).startsWith("Before changing anything")], [2, "Consider a short table-reset checklist between guests, with a sign-off sheet.", true]);
 check("priorities: a made-up theme in the steps is ignored", Object.keys(labels.steps), ["clean"]);
+
+// ---------- The saved summary ----------
+const secret = [mk("Rohan Mehta said the dal was bland", 2, "Rohan Mehta"), mk("Rohan Mehta: cold food", 1, "Rohan Mehta"), mk("Cold food and slow", 2, "Asha"), mk("Cold again", 2, "Asha")];
+const sAnalysis = analyseReviews(secret);
+const row = buildSummaryRow(sAnalysis, buildPriorities(sAnalysis), "upload");
+check("summary: only the four expected fields", Object.keys(row).sort(), ["data_source", "review_count", "theme_counts", "top_priorities"]);
+check("summary: review count and source", [row.review_count, row.data_source], [4, "upload"]);
+check("summary: theme counts match the analysis", row.theme_counts.food, { mentions: 4, positive: 0, negative: 4, mixed: 0 });
+check("summary: no review text or reviewer names inside", /Rohan|Mehta|Asha|dal|bland/.test(JSON.stringify(row)), false);
+check("summary: at most three priorities, labelled with counts only", row.top_priorities.length <= 3 && row.top_priorities.every((p) => Object.keys(p).sort().join() === "concerned_reviews,rank,theme"), true);
+check("summary: sample data is recorded as sample", buildSummaryRow(sAnalysis, buildPriorities(sAnalysis), "sample").data_source, "sample");
 
 // ---------- Batches ----------
 const m = ai.mergeBatches(

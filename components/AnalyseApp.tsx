@@ -10,6 +10,8 @@ import UploadView, { type Busy, type UploadSource } from "./dashboard/UploadView
 import { AI_REASONS, MAX_AI_REVIEWS, analysisFromLabels, prepareForAi, type AiLabels, type AnalysisMethod } from "@/lib/ai-analysis";
 import { analyseReviews } from "@/lib/analysis";
 import { buildPriorities } from "@/lib/priorities";
+import { saveSummary } from "@/lib/save-summary";
+import { buildSummaryRow } from "@/lib/summary-row";
 import { readTextWithProgress } from "@/lib/read-file";
 import { buildReviews, MAX_FILE_BYTES, MAX_REVIEWS, readReviewFile, type ParsedReview, type ReviewColumns } from "@/lib/review-csv";
 import { fileSize, plural } from "@/lib/format";
@@ -41,6 +43,8 @@ export default function AnalyseApp() {
   const versionRef = useRef(0);
   const [useAi, setUseAi] = useState(false);
   const [aiRun, setAiRun] = useState<AiRun | null>(null);
+  const [saved, setSaved] = useState(false);
+  const savedKey = useRef("");
   const pathname = usePathname();
 
   const parsed = useMemo(() => (source && source.columns.text !== undefined ? buildReviews(source.rows, source.columns) : null), [source]);
@@ -198,6 +202,20 @@ export default function AnalyseApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
+  // When results are on screen, save a counts-only summary once per analysis. A failure never affects what is shown.
+  useEffect(() => {
+    if (view === "upload" || !analysis || !priorities || !source) return;
+    const key = `${source.version}:${labels ? "ai" : "keyword"}`;
+    if (savedKey.current === key) return;
+    savedKey.current = key;
+    setSaved(false);
+    void saveSummary(buildSummaryRow(analysis, priorities, source.kind)).then((r) => {
+      if (savedKey.current !== key) return;
+      if (r === "saved") setSaved(true);
+      else if (r === "failed") log("Couldn't save the summary. Your results are not affected");
+    });
+  }, [view, analysis, priorities, source, labels]);
+
   // Each new screen starts at the top.
   useEffect(() => {
     window.scrollTo({ top: 0 });
@@ -241,19 +259,22 @@ export default function AnalyseApp() {
           summary={parsed?.summary ?? null}
           isSample={isSample}
           method={method}
+          saved={saved}
           activity={activity}
           onGo={setView}
           onSample={loadFullSample}
           onUseOwn={() => leave("Left the sample data")}
         />
       )}
-      {view === "themes" && <ThemesView analysis={analysis} isSample={isSample} method={method} onGo={goUpload} onSample={loadFullSample} onUseOwn={() => leave("Left the sample data")} />}
+      {view === "themes" && <ThemesView analysis={analysis} isSample={isSample} method={method}
+          saved={saved} onGo={goUpload} onSample={loadFullSample} onUseOwn={() => leave("Left the sample data")} />}
       {view === "plan" && (
         <ActionPlanView
           analysis={analysis}
           priorities={priorities}
           isSample={isSample}
           method={method}
+          saved={saved}
           ticks={ticks}
           onToggle={(key) => setTicks((t) => ({ ...t, [key]: !t[key] }))}
           onGo={goUpload}

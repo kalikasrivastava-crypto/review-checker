@@ -20,13 +20,14 @@ interface Props {
   summary: ParseSummary | null;
   isSample: boolean;
   method: AnalysisMethod;
+  saved: boolean;
   activity: ActivityItem[];
   onGo: (view: "upload" | "themes" | "plan") => void;
   onSample: () => void;
   onUseOwn: () => void;
 }
 
-export default function OverviewView({ method, analysis, priorities, summary, isSample, activity, onGo, onSample, onUseOwn }: Props) {
+export default function OverviewView({ method, saved, analysis, priorities, summary, isSample, activity, onGo, onSample, onUseOwn }: Props) {
   if (!analysis || !priorities || !summary) {
     return (
       <div className="stack-16">
@@ -69,7 +70,7 @@ export default function OverviewView({ method, analysis, priorities, summary, is
 
       {isSample && <SampleBar count={analysis.reviewCount} onUseOwn={onUseOwn} />}
 
-      <MethodBar method={method} />
+      <MethodBar method={method} saved={saved} />
 
       <dl className="metrics">
         <div className="metric">

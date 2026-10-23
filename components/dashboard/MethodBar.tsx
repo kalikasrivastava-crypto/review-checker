@@ -1,7 +1,7 @@
 import type { AnalysisMethod } from "@/lib/ai-analysis";
 
 /** Says which method produced the results on screen: "AI analysis" or "Keyword analysis". */
-export default function MethodBar({ method }: { method: AnalysisMethod }) {
+export default function MethodBar({ method, saved }: { method: AnalysisMethod; saved: boolean }) {
   const ai = method.kind === "ai";
   return (
     <p style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, margin: 0 }}>
@@ -14,6 +14,11 @@ export default function MethodBar({ method }: { method: AnalysisMethod }) {
             ? `${method.note} Keyword rules were used instead.`
             : "Phrase rules, no AI."}
       </span>
+      {saved && (
+        <span className="muted" title="Counts only. No review text or names are saved.">
+          · Saved
+        </span>
+      )}
     </p>
   );
 }
