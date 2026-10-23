@@ -15,7 +15,7 @@ export interface UploadSource {
 
 export interface Busy {
   name: string;
-  stage: "reading" | "checking";
+  stage: "reading" | "checking" | "ai";
   progress: number;
 }
 
@@ -35,10 +35,12 @@ interface Props {
   onSample: (which: "quick" | "full") => void;
   onClear: () => void;
   onColumn: (field: keyof ReviewColumns, value: number | null) => void;
+  useAi: boolean;
+  onUseAi: (on: boolean) => void;
   onViewResults: () => void;
 }
 
-export default function UploadView({ source, parsed, error, busy, onFile, onSample, onClear, onColumn, onViewResults }: Props) {
+export default function UploadView({ source, parsed, error, busy, onFile, onSample, onClear, onColumn, useAi, onUseAi, onViewResults }: Props) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const s = parsed?.summary;
@@ -74,7 +76,7 @@ export default function UploadView({ source, parsed, error, busy, onFile, onSamp
       <header className="page-head">
         <div>
           <h1>Upload reviews</h1>
-          <p>Add a CSV file of customer reviews. Your file is read in this browser tab and is never uploaded or saved.</p>
+          <p>Add a CSV file of customer reviews. By default your file is read in this browser tab and is never uploaded or saved. AI analysis is optional and off unless you switch it on below.</p>
         </div>
       </header>
 
@@ -137,7 +139,11 @@ export default function UploadView({ source, parsed, error, busy, onFile, onSamp
           <div className="or-row" role="status" aria-live="polite">
             <div style={{ flex: 1, minWidth: 220 }}>
               <p>
-                {busy.stage === "reading" ? `Reading ${busy.name}… ${busy.progress}%` : `Checking ${busy.name}…`}
+                {busy.stage === "reading"
+                  ? `Reading ${busy.name}… ${busy.progress}%`
+                  : busy.stage === "ai"
+                    ? "Asking the AI to read your reviews. This can take up to a minute for a large file…"
+                    : `Checking ${busy.name}…`}
               </p>
               <div className="meter" style={{ marginTop: 8 }} aria-hidden="true">
                 <span style={{ width: `${busy.stage === "checking" ? 100 : busy.progress}%` }} />
@@ -145,6 +151,17 @@ export default function UploadView({ source, parsed, error, busy, onFile, onSamp
             </div>
           </div>
         )}
+
+        <label className="ai-toggle" style={{ display: "flex", gap: 10, alignItems: "flex-start", marginTop: 16 }}>
+          <input type="checkbox" checked={useAi} disabled={!!busy} onChange={(e) => onUseAi(e.target.checked)} style={{ marginTop: 4 }} />
+          <span>
+            <strong>Use AI analysis (optional)</strong>
+            <span className="field-help" style={{ display: "block" }}>
+              Sends the review text and star ratings to Google&apos;s Gemini to label themes. Reviewer names, emails, links and phone numbers are removed first, though a name
+              written inside a review can&apos;t always be caught. Counts are still worked out here from your reviews, and if the AI fails we use the keyword rules.
+            </span>
+          </span>
+        </label>
 
         <div className="or-row">
           <p>No file handy? Try sample reviews. They are made up, not real customers.</p>

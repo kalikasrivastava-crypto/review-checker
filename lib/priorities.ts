@@ -111,7 +111,11 @@ const STEPS: Record<string, string[]> = {
 
 const CHECK_STEP = "Before changing anything, compare the example reviews with your own records, such as order times or complaints you have noted.";
 
-export function buildPriorities(analysis: AnalysisResult): PrioritiesResult {
+/**
+ * `aiSteps` (optional) are already-checked suggestions from the AI, by theme. When a theme has some they replace the
+ * ready-made ones. The ranking and every count still come only from `analysis`.
+ */
+export function buildPriorities(analysis: AnalysisResult, aiSteps?: Partial<Record<ThemeKey, string[]>>): PrioritiesResult {
   const total = analysis.reviewCount;
   const candidates = analysis.themes
     // "Other" is a catch-all, so it is shown on its own card but not ranked.
@@ -139,6 +143,8 @@ export function buildPriorities(analysis: AnalysisResult): PrioritiesResult {
     // At most three suggestions, then the reminder to compare with your own records, which is never cut.
     steps.splice(3);
     add(CHECK_STEP);
+    const suggested = aiSteps?.[theme.key];
+    if (suggested && suggested.length > 0) steps.splice(0, steps.length, ...suggested.slice(0, 3), CHECK_STEP);
     return {
       rank: i + 1,
       key: theme.key,

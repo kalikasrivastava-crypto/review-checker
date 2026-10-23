@@ -33,7 +33,7 @@ export function aiErrorMessage(code: AiErrorCode): string {
   }
 }
 
-function send(apiKey: string, model: string, system: string, user: string, json: boolean, signal: AbortSignal) {
+function send(apiKey: string, model: string, system: string, user: string, json: boolean, signal: AbortSignal, maxTokens: number, schema?: object) {
   return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
@@ -41,33 +41,45 @@ function send(apiKey: string, model: string, system: string, user: string, json:
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: "user", parts: [{ text: user }] }],
       generationConfig: {
-        maxOutputTokens: 2000,
+        maxOutputTokens: maxTokens,
         // Short thinking keeps answers around 2 seconds instead of 6+.
         thinkingConfig: { thinkingLevel: "low" },
         ...(json ? { responseMimeType: "application/json" } : {}),
+        ...(json && schema ? { responseSchema: schema } : {}),
       },
     }),
     signal,
   });
 }
 
-export async function askAI(system: string, user: string, json = false): Promise<string> {
+export interface AskOptions {
+  /** Longer jobs (like labelling a batch of reviews) need more room and time. Defaults suit one short reply. */
+  maxOutputTokens?: number;
+  timeoutMs?: number;
+  /** Skip the slower fallback models, so a caller with its own fallback can fail fast. */
+  noModelFallback?: boolean;
+  /** Gemini response schema (OpenAPI subset). Makes the JSON shape much more reliable. */
+  responseSchema?: object;
+}
+
+export async function askAI(system: string, user: string, json = false, opts: AskOptions = {}): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey || apiKey === "PASTE_YOUR_KEY_HERE") throw new AiError("no_key");
 
-  let signal = AbortSignal.timeout(TIMEOUT_MS); // one deadline for the call and its retry
+  const maxTokens = opts.maxOutputTokens ?? 2000;
+  let signal = AbortSignal.timeout(opts.timeoutMs ?? TIMEOUT_MS); // one deadline for the call and its retry
   let res: Response;
   try {
-    res = await send(apiKey, MODEL, system, user, json, signal);
-    for (const fallback of FALLBACK_MODELS) {
+    res = await send(apiKey, MODEL, system, user, json, signal, maxTokens, opts.responseSchema);
+    for (const fallback of opts.noModelFallback ? [] : FALLBACK_MODELS) {
       if (res.status !== 429) break;
-      signal = AbortSignal.timeout(FALLBACK_TIMEOUT_MS);
-      res = await send(apiKey, fallback, system, user, json, signal);
+      signal = AbortSignal.timeout(opts.timeoutMs ?? FALLBACK_TIMEOUT_MS);
+      res = await send(apiKey, fallback, system, user, json, signal, maxTokens, opts.responseSchema);
     }
     // Gemini sometimes answers "high demand" (503). One quick retry usually gets through.
     if (res.status === 503) {
       await new Promise((r) => setTimeout(r, 500));
-      res = await send(apiKey, MODEL, system, user, json, signal);
+      res = await send(apiKey, MODEL, system, user, json, signal, maxTokens, opts.responseSchema);
     }
   } catch (err) {
     if (err instanceof Error && err.name === "TimeoutError") throw new AiError("timeout");

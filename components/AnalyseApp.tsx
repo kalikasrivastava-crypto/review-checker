@@ -7,14 +7,24 @@ import AppShell, { type View } from "./dashboard/AppShell";
 import OverviewView, { type ActivityItem } from "./dashboard/OverviewView";
 import ThemesView from "./dashboard/ThemesView";
 import UploadView, { type Busy, type UploadSource } from "./dashboard/UploadView";
+import { AI_REASONS, MAX_AI_REVIEWS, analysisFromLabels, prepareForAi, type AiLabels, type AnalysisMethod } from "@/lib/ai-analysis";
 import { analyseReviews } from "@/lib/analysis";
 import { buildPriorities } from "@/lib/priorities";
 import { readTextWithProgress } from "@/lib/read-file";
-import { buildReviews, MAX_FILE_BYTES, MAX_REVIEWS, readReviewFile, type ReviewColumns } from "@/lib/review-csv";
+import { buildReviews, MAX_FILE_BYTES, MAX_REVIEWS, readReviewFile, type ParsedReview, type ReviewColumns } from "@/lib/review-csv";
 import { fileSize, plural } from "@/lib/format";
 
 interface Source extends UploadSource {
   rows: string[][];
+  /** Changes whenever the file or the chosen columns change, so an AI answer is only used for the reviews it was asked about. */
+  version: number;
+}
+
+/** What the AI analysis returned for one version of the loaded reviews: labels, or the reason it didn't work. */
+interface AiRun {
+  version: number;
+  labels: AiLabels | null;
+  reason: string | null;
 }
 
 const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
@@ -28,11 +38,23 @@ export default function AnalyseApp() {
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [ticks, setTicks] = useState<Record<string, boolean>>({});
   const activityId = useRef(0);
+  const versionRef = useRef(0);
+  const [useAi, setUseAi] = useState(false);
+  const [aiRun, setAiRun] = useState<AiRun | null>(null);
   const pathname = usePathname();
 
   const parsed = useMemo(() => (source && source.columns.text !== undefined ? buildReviews(source.rows, source.columns) : null), [source]);
-  const analysis = useMemo(() => (parsed && parsed.reviews.length > 0 ? analyseReviews(parsed.reviews) : null), [parsed]);
-  const priorities = useMemo(() => (analysis ? buildPriorities(analysis) : null), [analysis]);
+  // The AI's labels are used only when AI analysis is on and they were made for the reviews now loaded.
+  const aiCurrent = useAi && aiRun !== null && source !== null && aiRun.version === source.version ? aiRun : null;
+  const labels = aiCurrent?.labels ?? null;
+  const analysis = useMemo(
+    () => (parsed && parsed.reviews.length > 0 ? (labels ? analysisFromLabels(parsed.reviews, labels) : analyseReviews(parsed.reviews)) : null),
+    [parsed, labels],
+  );
+  const priorities = useMemo(() => (analysis ? buildPriorities(analysis, labels?.steps) : null), [analysis, labels]);
+  const method: AnalysisMethod = labels
+    ? { kind: "ai" }
+    : { kind: "keyword", note: aiCurrent?.reason ? (AI_REASONS[aiCurrent.reason] ?? AI_REASONS.unavailable) : null };
 
   function log(text: string) {
     const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -44,29 +66,57 @@ export default function AnalyseApp() {
     log(note ?? message);
   }
 
-  /** Reads the text of a CSV into rows and checks it. Returns true when the reviews were loaded. */
-  function load(kind: Source["kind"], name: string, text: string, size: number | null): boolean {
+  /** Reads the text of a CSV into rows and checks it. Returns the reviews when they were loaded, otherwise null. */
+  function load(kind: Source["kind"], name: string, text: string, size: number | null): { version: number; reviews: ParsedReview[] } | null {
     const file = readReviewFile(text);
     if (file.headers.length === 0 || file.rows.length === 0) {
       fail("That file has no reviews in it. It needs a header row and at least one review underneath.", `Couldn't use ${name}: no reviews found`);
-      return false;
+      return null;
     }
     if (file.rows.length > MAX_REVIEWS) {
       fail(
         `That file has ${file.rows.length.toLocaleString()} rows. The limit is ${MAX_REVIEWS.toLocaleString()}. Try a shorter date range.`,
         `Couldn't use ${name}: ${file.rows.length.toLocaleString()} rows is over the limit`,
       );
-      return false;
+      return null;
     }
     setError(null);
-    setSource({ kind, name, size, headers: file.headers, rows: file.rows, columns: file.guess });
+    const version = ++versionRef.current;
+    setSource({ kind, name, size, headers: file.headers, rows: file.rows, columns: file.guess, version });
+    setAiRun(null);
     setTicks({});
-    if (file.guess.text === undefined) log(`Read ${name}: choose which column holds the review text`);
-    else {
-      const { summary } = buildReviews(file.rows, file.guess);
-      log(kind === "sample" ? `Loaded the sample data (${plural(summary.used, "made-up review")})` : `Read ${name}: ${plural(summary.rowsRead, "row")}, ${plural(summary.used, "review")} used`);
+    if (file.guess.text === undefined) {
+      log(`Read ${name}: choose which column holds the review text`);
+      return { version, reviews: [] };
     }
-    return true;
+    const { summary, reviews } = buildReviews(file.rows, file.guess);
+    log(kind === "sample" ? `Loaded the sample data (${plural(summary.used, "made-up review")})` : `Read ${name}: ${plural(summary.rowsRead, "row")}, ${plural(summary.used, "review")} used`);
+    return { version, reviews };
+  }
+
+  /** Asks the server to have Gemini label the reviews. Any failure is kept as a reason, and the keyword rules are used. */
+  async function runAi(version: number, reviews: ParsedReview[]) {
+    if (reviews.length === 0) return;
+    const done = (labels: AiLabels | null, reason: string | null) => {
+      setAiRun({ version, labels, reason });
+      log(labels ? "AI analysis finished" : `AI analysis wasn't used (${(AI_REASONS[reason ?? ""] ?? AI_REASONS.unavailable).replace(/\.$/, "")}). Keyword rules were used`);
+    };
+    if (reviews.length > MAX_AI_REVIEWS) return done(null, "too_many");
+    setBusy({ name: "your reviews", stage: "ai", progress: 100 });
+    try {
+      const res = await fetch("/api/analyse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviews: prepareForAi(reviews) }),
+        signal: AbortSignal.timeout(75_000),
+      });
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; reason?: string; labels?: AiLabels["labels"]; steps?: AiLabels["steps"] } | null;
+      if (data?.ok && Array.isArray(data.labels)) done({ labels: data.labels, steps: data.steps ?? {} }, null);
+      else done(null, data?.reason ?? "unavailable");
+    } catch {
+      done(null, "network");
+    }
+    setBusy(null);
   }
 
   async function onFile(file: File) {
@@ -103,7 +153,11 @@ export default function AnalyseApp() {
     try {
       const res = await fetch(`/${file}`);
       if (!res.ok) throw new Error("missing");
-      if (load("sample", file, await res.text(), null)) setView("overview");
+      const loaded = load("sample", file, await res.text(), null);
+      if (loaded) {
+        if (useAi) await runAi(loaded.version, loaded.reviews);
+        setView("overview");
+      }
     } catch {
       fail("Couldn't load the sample reviews. Check your connection and try again.");
     }
@@ -116,12 +170,18 @@ export default function AnalyseApp() {
       const next = { ...cur.columns };
       if (value === null) delete next[field];
       else next[field] = value;
-      return { ...cur, columns: next };
+      return { ...cur, columns: next, version: ++versionRef.current };
     });
+  }
+
+  async function onViewResults() {
+    if (useAi && parsed && source && !(aiRun && aiRun.version === source.version)) await runAi(source.version, parsed.reviews);
+    setView("overview");
   }
 
   function leave(message: string) {
     setSource(null);
+    setAiRun(null);
     setError(null);
     setTicks({});
     setView("upload");
@@ -169,7 +229,9 @@ export default function AnalyseApp() {
           onSample={onSample}
           onClear={() => leave("Cleared the loaded reviews")}
           onColumn={onColumn}
-          onViewResults={() => setView("overview")}
+          useAi={useAi}
+          onUseAi={setUseAi}
+          onViewResults={() => void onViewResults()}
         />
       )}
       {view === "overview" && (
@@ -178,18 +240,20 @@ export default function AnalyseApp() {
           priorities={priorities}
           summary={parsed?.summary ?? null}
           isSample={isSample}
+          method={method}
           activity={activity}
           onGo={setView}
           onSample={loadFullSample}
           onUseOwn={() => leave("Left the sample data")}
         />
       )}
-      {view === "themes" && <ThemesView analysis={analysis} isSample={isSample} onGo={goUpload} onSample={loadFullSample} onUseOwn={() => leave("Left the sample data")} />}
+      {view === "themes" && <ThemesView analysis={analysis} isSample={isSample} method={method} onGo={goUpload} onSample={loadFullSample} onUseOwn={() => leave("Left the sample data")} />}
       {view === "plan" && (
         <ActionPlanView
           analysis={analysis}
           priorities={priorities}
           isSample={isSample}
+          method={method}
           ticks={ticks}
           onToggle={(key) => setTicks((t) => ({ ...t, [key]: !t[key] }))}
           onGo={goUpload}

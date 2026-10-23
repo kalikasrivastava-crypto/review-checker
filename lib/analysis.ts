@@ -368,7 +368,7 @@ export interface AnalysisResult {
   ratingCounts: Record<1 | 2 | 3 | 4 | 5, number>;
 }
 
-interface Mention {
+export interface Mention {
   index: number;
   tone: Tone;
   strength: number;
@@ -401,6 +401,14 @@ export function analyseReviews(reviews: ParsedReview[]): AnalysisResult {
     }
   });
 
+  return aggregate(reviews, mentions, noTheme);
+}
+
+/**
+ * Turns "which reviews mention which theme" into counts, shares, concerns and examples. Both the keyword rules and
+ * the AI path end here, so every number is computed from the real reviews by this code.
+ */
+export function aggregate(reviews: ParsedReview[], mentions: Map<ThemeKey, Mention[]>, noTheme: number): AnalysisResult {
   const total = reviews.length;
   const themes: ThemeResult[] = THEMES.map((def) => {
     const list = mentions.get(def.key)!;
@@ -478,3 +486,10 @@ export function analyseReviews(reviews: ParsedReview[]): AnalysisResult {
     ratingCounts,
   };
 }
+
+/** The concern labels each theme can show, so AI labels can only use wording that is already approved. */
+export const THEME_VOCAB: Record<ThemeKey, { label: string; concerns: string[]; fallbackConcern: string }> = Object.fromEntries(
+  THEMES.map((t) => [t.key, { label: t.label, concerns: [...new Set(t.rules.flatMap((r) => (r.concern ? [r.concern] : [])))], fallbackConcern: t.fallbackConcern }]),
+) as Record<ThemeKey, { label: string; concerns: string[]; fallbackConcern: string }>;
+
+export const THEME_KEYS: ThemeKey[] = THEMES.map((t) => t.key);

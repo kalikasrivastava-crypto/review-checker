@@ -3,6 +3,8 @@
 import { useState } from "react";
 import EmptyState from "./EmptyState";
 import SampleBar from "./SampleBar";
+import MethodBar from "./MethodBar";
+import type { AnalysisMethod } from "@/lib/ai-analysis";
 import ThemeCard from "../ThemeCard";
 import type { AnalysisResult, Tone } from "@/lib/analysis";
 import { plural } from "@/lib/format";
@@ -19,12 +21,13 @@ const FILTERS: { id: Filter; label: string }[] = [
 interface Props {
   analysis: AnalysisResult | null;
   isSample: boolean;
+  method: AnalysisMethod;
   onGo: (view: "upload") => void;
   onSample: () => void;
   onUseOwn: () => void;
 }
 
-export default function ThemesView({ analysis, isSample, onGo, onSample, onUseOwn }: Props) {
+export default function ThemesView({ method, analysis, isSample, onGo, onSample, onUseOwn }: Props) {
   const [filter, setFilter] = useState<Filter>("all");
 
   if (!analysis) {
@@ -61,6 +64,8 @@ export default function ThemesView({ analysis, isSample, onGo, onSample, onUseOw
 
       {isSample && <SampleBar count={analysis.reviewCount} onUseOwn={onUseOwn} />}
 
+      <MethodBar method={method} />
+
       <div className="segmented" role="group" aria-label="Filter themes by sentiment">
         {FILTERS.map((f) => (
           <button key={f.id} type="button" aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}>
@@ -80,10 +85,19 @@ export default function ThemesView({ analysis, isSample, onGo, onSample, onUseOw
       <details className="card card--pad details">
         <summary>How this was worked out</summary>
         <ul className="details-body prose-list">
-          <li>Each review is split into short pieces and checked against lists of phrases for each theme. Nothing is sent to an AI, and your file stays in your browser.</li>
-          <li>A “not” or “never” just before a phrase turns it around, so “not cold” is not counted as a concern.</li>
+          {method.kind === "ai" ? (
+            <>
+              <li>The AI (Google Gemini) read each review and labelled which themes it mentions and whether each mention is positive, negative or both. It was sent the review text and star rating only, with names, emails, links and phone numbers removed.</li>
+              <li>This app then did all the counting from your real reviews. The AI&apos;s own text is never used for a number, and any label that didn&apos;t pass our checks was dropped.</li>
+            </>
+          ) : (
+            <>
+              <li>Each review is split into short pieces and checked against lists of phrases for each theme. No AI was used for these results, and your file stayed in your browser.</li>
+              <li>A “not” or “never” just before a phrase turns it around, so “not cold” is not counted as a concern.</li>
+            </>
+          )}
           <li>A theme is “mostly positive” or “mostly negative” when at least 60% of its reviews lean that way. Otherwise it is “mixed”.</li>
-          <li>It reads English only, can misread sarcasm or unusual wording, and only finds phrases it knows. Treat the counts as a guide to what customers mention, not as proof of why things happen.</li>
+          <li>{method.kind === "ai" ? "AI labels can be wrong, especially on short or unusual reviews." : "It reads English only, can misread sarcasm or unusual wording, and only finds phrases it knows."} Treat the counts as a guide to what customers mention, not as proof of why things happen.</li>
         </ul>
       </details>
     </div>

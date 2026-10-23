@@ -3,6 +3,8 @@
 import { IconAlert } from "../UiIcons";
 import EmptyState from "./EmptyState";
 import SampleBar from "./SampleBar";
+import MethodBar from "./MethodBar";
+import type { AnalysisMethod } from "@/lib/ai-analysis";
 import type { AnalysisResult } from "@/lib/analysis";
 import type { PrioritiesResult } from "@/lib/priorities";
 import { pct, plural } from "@/lib/format";
@@ -11,6 +13,7 @@ interface Props {
   analysis: AnalysisResult | null;
   priorities: PrioritiesResult | null;
   isSample: boolean;
+  method: AnalysisMethod;
   ticks: Record<string, boolean>;
   onToggle: (key: string) => void;
   onGo: (view: "upload") => void;
@@ -18,7 +21,7 @@ interface Props {
   onUseOwn: () => void;
 }
 
-export default function ActionPlanView({ analysis, priorities, isSample, ticks, onToggle, onGo, onSample, onUseOwn }: Props) {
+export default function ActionPlanView({ method, analysis, priorities, isSample, ticks, onToggle, onGo, onSample, onUseOwn }: Props) {
   if (!analysis || !priorities) {
     return (
       <div className="stack-16">
@@ -47,6 +50,8 @@ export default function ActionPlanView({ analysis, priorities, isSample, ticks, 
       </header>
 
       {isSample && <SampleBar count={analysis.reviewCount} onUseOwn={onUseOwn} />}
+
+      <MethodBar method={method} />
 
       {priorities.smallSample && (
         <div className="alert alert--warning">

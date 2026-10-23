@@ -19,7 +19,7 @@ export default function SiteFooter() {
         </div>
         <p className="site-footer__fine">
           DineTrust shows what customers mention, not why it happens. Sample data is made up and always labelled. Reviews are read in your browser and
-          are never uploaded.
+          are only sent for analysis if you switch on AI analysis.
         </p>
       </div>
     </footer>

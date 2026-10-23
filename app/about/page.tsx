@@ -49,9 +49,9 @@ export default function About() {
 
             <h2>Honest about its limits</h2>
             <ul>
-              <li>It uses simple phrase rules, not AI. It reads English only and can misread sarcasm or unusual wording.</li>
-              <li>Every number is a count of reviews from your file. Sample data is made up and always labelled.</li>
-              <li>Your file is read in your browser. It isn&apos;t uploaded, saved or sent anywhere.</li>
+              <li>By default it uses simple phrase rules, not AI. They read English only and can misread sarcasm or unusual wording. You can switch on optional AI analysis, and each result page says which method was used.</li>
+              <li>Every number is a count of reviews from your file, worked out by this app even when the AI is used. Sample data is made up and always labelled.</li>
+              <li>Your file is read in your browser and isn&apos;t saved. If you switch on AI analysis, the review text (without reviewer names, emails, links or phone numbers) is sent to Google&apos;s Gemini.</li>
               <li>Progress ticked in the action plan is kept for the current visit only.</li>
             </ul>
 

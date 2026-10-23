@@ -16,7 +16,7 @@ const FEATURES = [
   { icon: <IconQuote />, title: "Real examples", text: "Every theme shows actual reviews from your file, so you can read what guests said." },
   { icon: <IconPlan />, title: "Priority issues", text: "The areas raising the most concerns, ranked by the number of reviews that mention them." },
   { icon: <IconOverview />, title: "Practical next steps", text: "Suggestions to check or try for each priority, written as ideas rather than conclusions." },
-  { icon: <IconShield />, title: "Private by design", text: "Your file is read in your browser. It isn't uploaded, saved or sent to an AI." },
+  { icon: <IconShield />, title: "Private by design", text: "Your file is read in your browser and isn't saved. Only if you switch on optional AI analysis is the review text, without names, sent to Google Gemini." },
 ];
 
 export default function Landing() {
@@ -41,7 +41,7 @@ export default function Landing() {
                   Explore sample data
                 </Link>
               </div>
-              <p className="hero__note">No sign-up. Your file is read in your browser and never uploaded.</p>
+              <p className="hero__note">No sign-up. Your file stays in your browser unless you choose AI analysis.</p>
             </div>
             <DashboardPreview />
           </section>

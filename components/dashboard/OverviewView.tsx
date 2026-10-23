@@ -1,6 +1,8 @@
 import { IconAlert } from "../UiIcons";
 import EmptyState from "./EmptyState";
 import SampleBar from "./SampleBar";
+import MethodBar from "./MethodBar";
+import type { AnalysisMethod } from "@/lib/ai-analysis";
 import type { AnalysisResult } from "@/lib/analysis";
 import type { PrioritiesResult } from "@/lib/priorities";
 import type { ParseSummary } from "@/lib/review-csv";
@@ -17,13 +19,14 @@ interface Props {
   priorities: PrioritiesResult | null;
   summary: ParseSummary | null;
   isSample: boolean;
+  method: AnalysisMethod;
   activity: ActivityItem[];
   onGo: (view: "upload" | "themes" | "plan") => void;
   onSample: () => void;
   onUseOwn: () => void;
 }
 
-export default function OverviewView({ analysis, priorities, summary, isSample, activity, onGo, onSample, onUseOwn }: Props) {
+export default function OverviewView({ method, analysis, priorities, summary, isSample, activity, onGo, onSample, onUseOwn }: Props) {
   if (!analysis || !priorities || !summary) {
     return (
       <div className="stack-16">
@@ -65,6 +68,8 @@ export default function OverviewView({ analysis, priorities, summary, isSample, 
       </header>
 
       {isSample && <SampleBar count={analysis.reviewCount} onUseOwn={onUseOwn} />}
+
+      <MethodBar method={method} />
 
       <dl className="metrics">
         <div className="metric">
