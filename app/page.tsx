@@ -1,5 +1,7 @@
 import Link from "next/link";
+import CountUp from "@/components/CountUp";
 import DashboardPreview from "@/components/DashboardPreview";
+import LandingStory from "@/components/LandingStory";
 import SiteFooter from "@/components/SiteFooter";
 import SiteHeader from "@/components/SiteHeader";
 import { IconBars, IconFile, IconPlan, IconQuote, IconShield, IconThemes, IconUpload, IconOverview } from "@/components/UiIcons";
@@ -45,6 +47,17 @@ export default function Landing() {
             </div>
             <DashboardPreview />
           </section>
+
+          <LandingStory />
+
+          <CountUp
+            items={[
+              { to: 5000, label: "reviews per file, at most" },
+              { to: 5, label: "main themes, plus “other”" },
+              { to: 3, label: "priorities to look at first" },
+              { to: 0, label: "files stored by default" },
+            ]}
+          />
 
           <section className="section" id="how-it-works" aria-labelledby="how-title">
             <div className="section__head">
