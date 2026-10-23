@@ -177,7 +177,7 @@ export default function UploadView({ source, parsed, error, busy, onFile, onSamp
       </section>
 
       {source && !s && (
-        <section className="card card--pad" aria-labelledby="pick-title">
+        <section id="check-card" className="card card--pad" aria-labelledby="pick-title" style={{ scrollMarginTop: 16 }}>
           <div className="card__head">
             <h2 id="pick-title">Check your file</h2>
             <span className="badge badge--accent">Your file</span>
@@ -201,7 +201,7 @@ export default function UploadView({ source, parsed, error, busy, onFile, onSamp
       )}
 
       {source && s && (
-        <section className="card card--pad" aria-labelledby="check-title">
+        <section id="check-card" className="card card--pad" aria-labelledby="check-title" style={{ scrollMarginTop: 16 }}>
           <div className="card__head">
             <h2 id="check-title">Check your file</h2>
             {source.kind === "sample" ? <span className="badge badge--sample">Sample data</span> : <span className="badge badge--accent">Your file</span>}

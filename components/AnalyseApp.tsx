@@ -143,7 +143,11 @@ export default function AnalyseApp() {
       const text = await readTextWithProgress(file, (progress) => setBusy({ name: file.name, stage: "reading", progress }));
       setBusy({ name: file.name, stage: "checking", progress: 100 });
       await nextFrame();
-      if (load("upload", file.name, text, file.size)) setView("upload");
+      if (load("upload", file.name, text, file.size)) {
+        setView("upload");
+        // The "Check your file" card sits below the drop area, so bring it into view or it looks like nothing happened.
+        setTimeout(() => document.getElementById("check-card")?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+      }
     } catch {
       fail("Couldn't read that file. Is it a CSV?", `Couldn't read ${file.name}`);
     }
