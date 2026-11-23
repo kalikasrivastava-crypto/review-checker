@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DineTrust pitch video</title>
+<style>html,body{margin:0;background:#f8f6ef}canvas{display:block;width:1280px;height:720px}</style>
+</head>
+<body>
+<canvas id="c" width="1280" height="720"></canvas>
+<script>
+/* A 60-second motion-graphics pitch for DineTrust. Everything is drawn from the time t (seconds), so any frame
+   can be rendered on its own: window.render(t). video/render.mjs steps t from 0 to 60 and encodes an MP4. */
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const W = 1280, H = 720, DURATION = 60;
+const C = { bg: '#f8f6ef', surface: '#ffffff', alt: '#f2efe6', ink: '#1f2623', muted: '#5b645f', line: '#e3dfd2', green: '#1f4d3a', sand: '#dccaa0', gold: '#b7860b',
+  food: '#1f4d3a', speed: '#b7860b', clean: '#566273', price: '#7a4f8f', ambience: '#2a7a8a' };
+const SERIF = 'Georgia, "Times New Roman", serif', SANS = '-apple-system, "Helvetica Neue", Arial, sans-serif';
+
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const easeOut = (x) => 1 - Math.pow(1 - x, 3);
+const easeInOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+const back = (x) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+function text(s, x, y, size, color, o = {}) {
+  ctx.font = `${o.weight || 400} ${size}px ${o.font || SANS}`; ctx.fillStyle = color; ctx.textAlign = o.align || 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText(s, x, y);
+}
+function lines(arr, x, y, size, color, lh, o = {}) { arr.forEach((s, i) => text(s, x, y + i * lh, size, color, o)); }
+/* Fade a block of drawing in at `a` and out at `b`. */
+function scene(t, a, b, fn, fade = 0.5) {
+  if (t < a || t > b) return;
+  const alpha = Math.min(seg(t, a, a + fade), 1 - seg(t, b - fade, b));
+  ctx.save(); ctx.globalAlpha = Math.max(0, alpha); fn(t - a); ctx.restore();
+}
+function appear(t, at, dur = 0.6) { return easeOut(seg(t, at, at + dur)); }
+
+function mark(cx, cy, s, p = 1) {            // the DineTrust logo mark: a sand bubble behind a forest bubble with a check
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(s, s);
+  ctx.fillStyle = C.sand; rr(-34, -42, 80, 80, 24); ctx.fill();
+  ctx.fillStyle = C.green; rr(-46, -30, 80, 80, 24); ctx.fill();
+  ctx.strokeStyle = '#f8f6ef'; ctx.lineWidth = 9; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const pts = [[-26, 10], [-12, 24], [14, -6]]; ctx.beginPath(); ctx.moveTo(...pts[0]);
+  const a = clamp(p * 2, 0, 1), b = clamp(p * 2 - 1, 0, 1);
+  ctx.lineTo(pts[0][0] + (pts[1][0] - pts[0][0]) * a, pts[0][1] + (pts[1][1] - pts[0][1]) * a);
+  if (b > 0) ctx.lineTo(pts[1][0] + (pts[2][0] - pts[1][0]) * b, pts[1][1] + (pts[2][1] - pts[1][1]) * b);
+  ctx.stroke(); ctx.restore();
+}
+
+function background(t) {
+  ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(31,77,58,0.07)';
+  for (let i = 0; i < 40; i++) {            // slow drifting dots
+    const x = ((i * 137.5) % W + t * (6 + (i % 5) * 2)) % W, y = (i * 91.3 + Math.sin(t * 0.4 + i) * 14) % H;
+    ctx.beginPath(); ctx.arc(x, y, 2 + (i % 3), 0, 7); ctx.fill();
+  }
+}
+
+/* ---- Scene 1 (0-6): title ---- */
+function sceneTitle(s) {
+  const p = back(seg(s, 0.2, 1.2));
+  mark(W / 2 - 150, 300, 1.15 * p, seg(s, 0.5, 1.6));
+  const x = easeOut(seg(s, 0.6, 1.4));
+  ctx.save(); ctx.globalAlpha *= x; text('DineTrust', W / 2 - 70, 330 + (1 - x) * 24, 88, C.ink, { font: SERIF, weight: 700 }); ctx.restore();
+  const y = easeOut(seg(s, 2, 3));
+  ctx.save(); ctx.globalAlpha *= y; text('What your customers keep telling you.', W / 2, 440 + (1 - y) * 16, 36, C.green, { align: 'center', font: SERIF }); ctx.restore();
+  const z = easeOut(seg(s, 3.2, 4.2));
+  ctx.save(); ctx.globalAlpha *= z; text('Customer feedback insights for restaurants', W / 2, 500, 24, C.muted, { align: 'center' }); ctx.restore();
+}
+
+/* ---- Scene 2 (6-16): the problem ---- */
+const CARDS = Array.from({ length: 22 }, (_, i) => ({ x: 140 + ((i * 211) % 1000), y: 250 + ((i * 97) % 380), r: ((i * 37) % 21 - 10) / 100, d: i * 0.18, stars: 1 + ((i * 3) % 5), w: 120 + (i * 13) % 50 }));
+function sceneProblem(s) {
+  text('Hundreds of reviews.', W / 2, 130, 60, C.ink, { align: 'center', font: SERIF, weight: 700 });
+  const b = easeOut(seg(s, 3, 4));
+  ctx.save(); ctx.globalAlpha *= b; text('Nobody has time to read them all.', W / 2, 190 + (1 - b) * 14, 36, C.green, { align: 'center', font: SERIF }); ctx.restore();
+  CARDS.forEach((c) => {
+    const p = easeOut(seg(s, 0.4 + c.d, 1.2 + c.d)); if (p <= 0) return;
+    const dx = Math.sin(s * 0.9 + c.d * 5) * 8, dy = Math.cos(s * 0.7 + c.d * 4) * 8;
+    ctx.save(); ctx.translate(c.x + dx, c.y + dy + (1 - p) * 120); ctx.rotate(c.r); ctx.globalAlpha *= p;
+    ctx.shadowColor = 'rgba(23,35,29,0.18)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 6;
+    ctx.fillStyle = C.surface; rr(-80, -45, 160, 90, 10); ctx.fill(); ctx.shadowColor = 'transparent';
+    ctx.fillStyle = C.gold; for (let k = 0; k < c.stars; k++) { ctx.beginPath(); ctx.arc(-62 + k * 14, -28, 4.5, 0, 7); ctx.fill(); }
+    ctx.fillStyle = C.line; rr(-64, -10, c.w - 40, 7, 3.5); ctx.fill(); rr(-64, 6, c.w - 70, 7, 3.5); ctx.fill(); rr(-64, 22, c.w - 90, 7, 3.5); ctx.fill();
+    ctx.restore();
+  });
+  const n = Math.round(150 * easeOut(seg(s, 1, 6)));
+  const q = easeOut(seg(s, 5.5, 6.5));
+  ctx.save(); ctx.globalAlpha *= q; text(`${n} sample reviews and counting`, W / 2, 690, 22, C.muted, { align: 'center' }); ctx.restore();
+}
+
+/* ---- Scene 3 (16-30): how it works ---- */
+const THEMES = ['food', 'speed', 'clean', 'price', 'ambience'], LET = { food: 'F', speed: 'S', clean: 'C', price: 'P', ambience: 'A' };
+const NAME = { food: 'Food', speed: 'Service speed', clean: 'Cleanliness', price: 'Pricing', ambience: 'Ambience' };
+const TILES = Array.from({ length: 60 }, (_, i) => ({ th: THEMES[(i * 7 + (i >> 2)) % 5], concern: (i * 5 + (i >> 1)) % 7 < 3 }));
+const TOP = new Set(['speed', 'food', 'price']);
+const STEPS3 = [['1', 'Upload a CSV of reviews', 'Only the review text is required.'], ['2', 'Sorted into themes', 'Food, speed, cleanliness, pricing, ambience.'], ['3', 'See what to check first', 'Concerns stand out and are counted from the real file.']];
+function sceneHow(s) {
+  text('How it works', 90, 110, 50, C.ink, { font: SERIF, weight: 700 });
+  const step = s < 4.6 ? 0 : s < 9.4 ? 1 : 2;
+  STEPS3.forEach((st, i) => {
+    const active = i === step, a = appear(s, 0.5 + i * 0.4);
+    ctx.save(); ctx.globalAlpha *= a * (active ? 1 : 0.35);
+    ctx.fillStyle = active ? C.green : C.line; ctx.beginPath(); ctx.arc(122, 230 + i * 150, 28, 0, 7); ctx.fill();
+    text(st[0], 122, 241 + i * 150, 30, active ? '#fff' : C.muted, { align: 'center', weight: 700 });
+    text(st[1], 170, 228 + i * 150, 30, C.ink, { weight: 700 }); text(st[2], 170, 264 + i * 150, 21, C.muted);
+    ctx.restore();
+  });
+  // the tile wall
+  const ox = 700, oy = 190, sz = 44, gap = 7;
+  TILES.forEach((t, i) => {
+    const col = i % 10, row = (i / 10) | 0, x = ox + col * (sz + gap), y = oy + row * (sz + gap);
+    const pop = back(seg(s, 0.8 + i * 0.03, 1.4 + i * 0.03)); if (pop <= 0) return;
+    const colourP = easeOut(seg(s, 4.8 + i * 0.05, 5.4 + i * 0.05));
+    let alpha = 1, ring = 0;
+    if (s >= 9.4) { const f = easeOut(seg(s, 9.6, 10.6)); if (!t.concern) alpha = 1 - 0.84 * f; else ring = f; }
+    ctx.save(); ctx.translate(x + sz / 2, y + sz / 2); ctx.scale(pop, pop); ctx.globalAlpha *= alpha;
+    ctx.fillStyle = colourP > 0 ? mix(C.alt, C[t.th], colourP) : C.alt; rr(-sz / 2, -sz / 2, sz, sz, 8); ctx.fill();
+    if (colourP > 0.5) text(LET[t.th], 0, 7, 18, '#fff', { align: 'center', weight: 700 });
+    if (ring > 0) { ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.globalAlpha *= ring; rr(-sz / 2 - 3, -sz / 2 - 3, sz + 6, sz + 6, 10); ctx.stroke(); }
+    ctx.restore();
+  });
+  const lg = appear(s, 5.6);
+  ctx.save(); ctx.globalAlpha *= lg; THEMES.forEach((k, i) => { const x = 696 + i * 112; ctx.fillStyle = C[k]; rr(x, 560, 20, 20, 5); ctx.fill(); text(LET[k], x + 10, 575, 13, '#fff', { align: 'center', weight: 700 }); text(NAME[k].split(' ')[0], x + 27, 576, 15, C.muted); }); ctx.restore();
+  const lab = appear(s, 10.8);
+  ctx.save(); ctx.globalAlpha *= lab; text('Rings mark reviews that raise a concern', 700, 620, 20, C.muted); ctx.restore();
+}
+function mix(a, b, p) { const pa = hex(a), pb = hex(b); return `rgb(${pa.map((v, i) => Math.round(v + (pb[i] - v) * p)).join(',')})`; }
+function hex(h) { return [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); }
+
+/* ---- Scene 4 (30-42): priorities ---- */
+const PRI = [['Service speed', 44, C.speed], ['Food quality', 33, C.food], ['Pricing', 26, C.price]];
+function scenePriorities(s) {
+  text('Where to look first', 90, 120, 52, C.ink, { font: SERIF, weight: 700 });
+  const sub = appear(s, 0.5);
+  ctx.save(); ctx.globalAlpha *= sub; text('Areas where the most reviews raise a concern', 90, 165, 26, C.muted); ctx.restore();
+  PRI.forEach((p, i) => {
+    const a = appear(s, 1.2 + i * 0.9), y = 250 + i * 115;
+    ctx.save(); ctx.globalAlpha *= a; ctx.translate((1 - a) * -40, 0);
+    ctx.fillStyle = C.green; ctx.beginPath(); ctx.arc(120, y, 26, 0, 7); ctx.fill(); text(String(i + 1), 120, y + 10, 28, '#fff', { align: 'center', weight: 700 });
+    text(p[0], 170, y - 6, 34, C.ink, { weight: 700 });
+    const grow = easeOut(seg(s, 1.6 + i * 0.9, 3.4 + i * 0.9)), full = 780 * (p[1] / 44);
+    ctx.fillStyle = C.alt; rr(170, y + 10, 780, 18, 9); ctx.fill(); ctx.fillStyle = p[2]; rr(170, y + 10, Math.max(18, full * grow), 18, 9); ctx.fill();
+    text(`${Math.round(p[1] * grow)} reviews`, 980, y + 28, 30, C.ink, { weight: 700 });
+    ctx.restore();
+  });
+  const q = appear(s, 6);
+  ctx.save(); ctx.globalAlpha *= q; ctx.fillStyle = C.green; rr(90, 590, 1100, 70, 14); ctx.fill();
+  text('Customers frequently mention these. The results never claim why.', W / 2, 635, 28, '#fff', { align: 'center', font: SERIF }); ctx.restore();
+  const n = appear(s, 7.5);
+  ctx.save(); ctx.globalAlpha *= n; ctx.fillStyle = '#faecce'; rr(930, 60, 270, 44, 22); ctx.fill(); text('Sample data: 150 made-up reviews', 1065, 88, 17, '#7a4b00', { align: 'center', weight: 700 }); ctx.restore();
+}
+
+/* ---- Scene 5 (42-52): honest by design ---- */
+const TRUST = ['Every count comes from your real reviews', 'Keyword rules by default. AI is optional and only labels reviews', 'Your file stays in your browser unless you choose AI', 'Sample data is always labelled as sample'];
+function sceneTrust(s) {
+  text('Built to stay honest', 90, 120, 52, C.ink, { font: SERIF, weight: 700 });
+  TRUST.forEach((t, i) => {
+    const a = back(seg(s, 0.8 + i * 1.7, 1.6 + i * 1.7)); if (a <= 0) return;
+    const y = 220 + i * 105;
+    ctx.save(); ctx.translate(0, y); ctx.globalAlpha *= clamp(a); ctx.translate((1 - clamp(a)) * 60, 0);
+    ctx.fillStyle = C.surface; ctx.shadowColor = 'rgba(23,35,29,0.14)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 6; rr(90, -34, 1100, 76, 16); ctx.fill(); ctx.shadowColor = 'transparent';
+    ctx.fillStyle = C.green; ctx.beginPath(); ctx.arc(140, 4, 20, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(131, 5); ctx.lineTo(138, 12); ctx.lineTo(150, -3); ctx.stroke();
+    text(t, 185, 15, 29, C.ink); ctx.restore();
+  });
+}
+
+/* ---- Scene 6 (52-60): what's next and close ---- */
+const NEXT = [['Add reviews by hand', 'Type or paste a review without a file'], ['Improvement tracker', 'See whether the changes you make help'], ['Accounts', 'Save your progress between visits']];
+function sceneNext(s) {
+  if (s < 5.2) {
+    text("What's next", 90, 120, 52, C.ink, { font: SERIF, weight: 700 });
+    NEXT.forEach((n, i) => {
+      const a = easeOut(seg(s, 0.6 + i * 1.1, 1.3 + i * 1.1)); const y = 240 + i * 120;
+      ctx.save(); ctx.globalAlpha *= a; ctx.translate((1 - a) * 50, 0);
+      ctx.fillStyle = C.surface; ctx.shadowColor = 'rgba(23,35,29,0.14)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 6; rr(90, y - 40, 1100, 90, 16); ctx.fill(); ctx.shadowColor = 'transparent';
+      text(n[0], 130, y + 2, 32, C.ink, { weight: 700 }); text(n[1], 130, y + 32, 22, C.muted);
+      ctx.fillStyle = C.sand; rr(1010, y - 14, 140, 38, 19); ctx.fill(); text('Coming next', 1080, y + 12, 17, C.ink, { align: 'center', weight: 700 });
+      ctx.restore();
+    });
+  }
+  const c = easeOut(seg(s, 4.8, 5.8));
+  if (c > 0) {
+    ctx.save(); ctx.globalAlpha = c; ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H); ctx.restore();
+    ctx.save(); ctx.globalAlpha = c; mark(W / 2 - 150, 300, 1.0, 1); text('DineTrust', W / 2 - 80, 328, 76, C.ink, { font: SERIF, weight: 700 });
+    text('Understand what your customers keep telling you.', W / 2, 420, 32, C.green, { align: 'center', font: SERIF });
+    text('review-checker-mu.vercel.app', W / 2, 500, 30, C.ink, { align: 'center', weight: 700 }); ctx.restore();
+  }
+}
+
+window.render = function (t) {
+  background(t);
+  scene(t, 0, 6, sceneTitle, 0.5);
+  scene(t, 6, 16, sceneProblem, 0.5);
+  scene(t, 16, 30, sceneHow, 0.5);
+  scene(t, 30, 42, scenePriorities, 0.5);
+  scene(t, 42, 52, sceneTrust, 0.5);
+  scene(t, 52, 60, sceneNext, 0.3);
+  const fadeEnd = seg(t, DURATION - 0.6, DURATION);       // the very last frames fade to the background colour
+  if (fadeEnd > 0) { ctx.fillStyle = `rgba(248,246,239,${fadeEnd})`; ctx.fillRect(0, 0, W, H); }
+};
+window.DURATION = DURATION;
+window.render(0);
+</script>
+</body>
+</html>
