@@ -1882,3 +1882,38 @@ details.details > summary {
     transition: none;
   }
 }
+
+/* ---------- contact form ---------- */
+.contact-card {
+  max-width: 640px;
+}
+.contact-form {
+  display: grid;
+  gap: 16px;
+  position: relative;
+}
+.contact-form label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.contact-form input,
+.contact-form textarea {
+  width: 100%;
+  font: inherit;
+  font-weight: 400;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+.contact-form textarea {
+  resize: vertical;
+}
+.contact-form input:focus-visible,
+.contact-form textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

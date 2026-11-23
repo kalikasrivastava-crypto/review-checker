@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ContactForm from "@/components/ContactForm";
 import CountUp from "@/components/CountUp";
 import DashboardPreview from "@/components/DashboardPreview";
 import LandingStory from "@/components/LandingStory";
@@ -101,6 +102,17 @@ export default function Landing() {
                 <li>Results show what customers mention, not why it happens. Treat them as a place to start checking.</li>
                 <li>Sample data is made up and is always labelled as sample data.</li>
               </ul>
+            </div>
+          </section>
+
+          <section className="section" id="contact" aria-labelledby="contact-title">
+            <div className="section__head">
+              <p className="eyebrow">Contact</p>
+              <h2 id="contact-title">Have a question? Send it to us.</h2>
+              <p>Tell us what you&apos;d like to know. We&apos;ll email you a confirmation straight away and reply personally soon after.</p>
+            </div>
+            <div className="card card--pad contact-card">
+              <ContactForm />
             </div>
           </section>
 
