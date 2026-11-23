@@ -108,8 +108,8 @@ export default function Landing() {
           <section className="section" id="contact" aria-labelledby="contact-title">
             <div className="section__head">
               <p className="eyebrow">Contact</p>
-              <h2 id="contact-title">Have a question? Send it to us.</h2>
-              <p>Tell us what you&apos;d like to know. We&apos;ll email you a confirmation straight away and reply personally soon after.</p>
+              <h2 id="contact-title">Have a concern? Tell us.</h2>
+              <p>Share your name, email address and what&apos;s worrying you. We&apos;ll email you a confirmation straight away and reply personally soon after.</p>
             </div>
             <div className="card card--pad contact-card">
               <ContactForm />

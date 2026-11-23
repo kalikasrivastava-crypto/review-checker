@@ -57,11 +57,11 @@ export default function ContactForm() {
         <input name="name" type="text" autoComplete="name" required maxLength={100} disabled={sending} />
       </label>
       <label>
-        Your email
+        Your email address
         <input name="email" type="email" autoComplete="email" required maxLength={254} disabled={sending} />
       </label>
       <label>
-        Your question
+        Your concern
         <textarea name="message" rows={5} required maxLength={2000} disabled={sending} />
       </label>
       {/* Hidden from people. Bots fill it in, and the server then ignores the message. */}
